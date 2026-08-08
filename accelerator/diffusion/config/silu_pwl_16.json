@@ -1,0 +1,106 @@
+{
+  "coefficients": [
+    {
+      "end_q8": -1792,
+      "intercept_q8": -71,
+      "slope_q16": 0,
+      "start_q8": -2048
+    },
+    {
+      "end_q8": -1536,
+      "intercept_q8": -71,
+      "slope_q16": 0,
+      "start_q8": -1792
+    },
+    {
+      "end_q8": -1280,
+      "intercept_q8": -71,
+      "slope_q16": 0,
+      "start_q8": -1536
+    },
+    {
+      "end_q8": -1024,
+      "intercept_q8": -71,
+      "slope_q16": 0,
+      "start_q8": -1280
+    },
+    {
+      "end_q8": -768,
+      "intercept_q8": -71,
+      "slope_q16": 0,
+      "start_q8": -1024
+    },
+    {
+      "end_q8": -512,
+      "intercept_q8": -71,
+      "slope_q16": 0,
+      "start_q8": -768
+    },
+    {
+      "end_q8": -256,
+      "intercept_q8": -66,
+      "slope_q16": 624,
+      "start_q8": -512
+    },
+    {
+      "end_q8": 0,
+      "intercept_q8": 1,
+      "slope_q16": 17625,
+      "start_q8": -256
+    },
+    {
+      "end_q8": 256,
+      "intercept_q8": 1,
+      "slope_q16": 47911,
+      "start_q8": 0
+    },
+    {
+      "end_q8": 512,
+      "intercept_q8": -77,
+      "slope_q16": 67537,
+      "start_q8": 256
+    },
+    {
+      "end_q8": 768,
+      "intercept_q8": -110,
+      "slope_q16": 71836,
+      "start_q8": 512
+    },
+    {
+      "end_q8": 1024,
+      "intercept_q8": -90,
+      "slope_q16": 70145,
+      "start_q8": 768
+    },
+    {
+      "end_q8": 1280,
+      "intercept_q8": -57,
+      "slope_q16": 68058,
+      "start_q8": 1024
+    },
+    {
+      "end_q8": 1536,
+      "intercept_q8": -33,
+      "slope_q16": 66757,
+      "start_q8": 1280
+    },
+    {
+      "end_q8": 1792,
+      "intercept_q8": -17,
+      "slope_q16": 66090,
+      "start_q8": 1536
+    },
+    {
+      "end_q8": 2048,
+      "intercept_q8": -9,
+      "slope_q16": 65778,
+      "start_q8": 1792
+    }
+  ],
+  "domain_limit_q8": 2048,
+  "input_fraction_bits": 8,
+  "negative_output_cap_q8": 0,
+  "output_fraction_bits": 8,
+  "segments": 16,
+  "slope_fraction_bits": 16
+}
