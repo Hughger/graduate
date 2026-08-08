@@ -1,4 +1,4 @@
-  # 蹇界暐鎵€鏈変簩杩涘埗鏂囦欢鍜岀紪璇戜骇鐗?
+  # 忽略所有二进制文件和编译产物
   *.class
   *.o
   *.d
@@ -11,7 +11,7 @@
   *.dump
   *.verilog
    
-   # 蹇界暐鐩綍
+   # 忽略目录
    target/
    test_run_dir/
    project/
@@ -19,14 +19,14 @@
    waves/
    vsim/
    
-   # 蹇界暐鐗瑰畾鏂囦欢
+   # 忽略特定文件
    hs_err_pid*.log
    *.jou
    *.pb
    conv_result.csv
    regression
    
-   # 蹇界暐 IDE 閰嶇疆鏂囦欢
+   # 忽略 IDE 配置文件
    .idea/
    .vscode/ 
    
