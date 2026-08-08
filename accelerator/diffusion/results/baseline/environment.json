@@ -14,5 +14,5 @@
   "python": "3.12.13",
   "sbt": "unavailable",
   "torch": "unavailable",
-  "vivado": "unavailable"
+  "vivado": "vivado v2024.2 (64-bit)"
 }
