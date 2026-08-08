@@ -1,0 +1,18 @@
+{
+  "java": "unavailable",
+  "legacy_build_sbt": "build.sbt",
+  "legacy_config": {
+    "colSize": 32,
+    "compressionFactor": 4,
+    "dataWidth": 8,
+    "pipeline": 2,
+    "rowSize": 32,
+    "tLatency": 4,
+    "tileSize": 16
+  },
+  "numpy": "2.3.5",
+  "python": "3.12.13",
+  "sbt": "unavailable",
+  "torch": "unavailable",
+  "vivado": "unavailable"
+}

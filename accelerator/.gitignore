@@ -33,3 +33,13 @@
    riscv-tools/prebuilt_tools/prefix/*
    doc/build
    .history
+# SD1.5 diffusion accelerator generated data and implementation outputs
+diffusion/artifacts/
+diffusion/results/raw/
+fpga/AXKU15/diffusion/vivado/
+*.bit
+*.ltx
+*.safetensors
+*.ckpt
+*.pt
+*.pth
