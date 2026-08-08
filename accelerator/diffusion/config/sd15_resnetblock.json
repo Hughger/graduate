@@ -5,6 +5,19 @@
   "channel_block": 32,
   "kernel": [3, 3],
   "stride": 1,
+  "layout": {
+    "tensor": "[N,Cb,H,W,32]",
+    "channel_block": 32
+  },
+  "quantization": {
+    "activation_zero_point": 0,
+    "weight_zero_point": 0,
+    "weight_scale": "per_output_channel",
+    "activation_scale": "per_stage",
+    "accumulator_dtype": "int32",
+    "intermediate_dtype": "int16",
+    "rounding": "away_from_zero"
+  },
   "supported_shapes": [
     [1, 320, 64, 64],
     [1, 640, 32, 32],
