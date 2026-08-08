@@ -1,0 +1,38 @@
+//注意事项
+//1.incr mode下，读写地址的最后3bit必须相同
+//2.jump mode下，读写地址的最后3bit必须都为0
+//3.rtl自带配置检查，若配置错误dma不启动，且上报错误中段，需清中断后再使用
+
+// incr mode 配置伪代码
+apb_write(12'h20,1);        //incr mode and enable descripter
+apb_write(12'h24,256);      //length 256 byte
+apb_write(12'h28,'h1000);   //src addr
+apb_write(12'h2c,'h2000);   //dst addr
+apb_write(12'h0,16<<8 | 1); //start
+
+wait_int();                 //等中断
+执行中断函数。
+
+// jump mode 配置伪代码(写方向jump,读方向incr.)相反方向类似
+apb_write(12'h20,3);		//wr jump ,rd incr mode and enable descripter
+apb_write(12'h24,2048);		//length 
+apb_write(12'h28,'h2000);	//src addr
+apb_write(12'h2c,'h6000);	//dst addr
+apb_write(12'h34,'h10);		//wr jump byte
+apb_write(12'h0,16<<8 | 1); //start
+
+wait_int();                 //等中断
+执行中断函数。
+
+
+//中断函数
+void DMA_IRQHandler{
+    rdata = apb_read(12'h004);
+    if((rdata & 0x02)==1){
+        printf("dma error");
+        apb_write(12'h8,1); //clr dma err int.
+    }else if((rdata & 0x01) == 1){
+        printf("dma done");
+        apb_write(12'h0,16<<8 | 0); //clr dma done int
+    }
+}

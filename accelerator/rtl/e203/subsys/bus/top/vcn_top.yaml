@@ -1,0 +1,41 @@
+top_module: bus_top
+
+# Global Define files (optional)  
+define_files: 
+  - ../axi_x2x/src/DW_axi_x2x_cc_constants.vh
+  - ../axi_x2x/src/DW_axi_x2x_constants.vh
+  - ../axi_x2x/src/DW_axi_x2x_bcm_params.vh
+  - ../axi_x2x/src/DW_axi_x2x_all_includes.vh
+  - ../axi_matrix/src/DW_axi_cc_constants.vh
+  - ../axi_matrix/src/DW_axi_constants.vh
+  - ../axi_matrix/src/DW_axi_bcm_params.vh
+  - ../axi_matrix/src/DW_axi_all_includes.vh
+
+# Module definitions
+rtl_path:
+  - ../axi_x2x/src/DW_axi_x2x.v
+  - ../axi_matrix/src/DW_axi.v
+
+instances:
+  - module: DW_axi_x2x
+    name: u_DW_axi_x2x
+  - module: DW_axi
+    name: u_DW_axi
+
+# inter-module connections
+connections:
+    u_DW_axi_x2x.aclk_m    : aclk 
+    u_DW_axi_x2x.aresetn_m : aresetn 
+    u_DW_axi_x2x.wid_s1    :  
+# bundle connections
+bundle_con:
+  - axi:
+      u_DW_axi_x2x.*_m  : "*_m1"
+      u_DW_axi_x2x.*_s1 : "*_m1_conv"
+      u_DW_axi_x2x.*_s  : "*_m1_conv"
+      u_DW_axi.*_m1     : "*_m1_conv"
+      u_DW_axi.dbg_*_s0 :     # 悬空信号，不连接到顶层端口
+
+# top-level output additions
+top_add:
+  

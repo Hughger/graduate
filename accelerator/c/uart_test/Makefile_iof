@@ -1,0 +1,29 @@
+CROSS_COMPILE = riscv64-unknown-elf-
+CC = $(CROSS_COMPILE)gcc
+OBJCOPY = $(CROSS_COMPILE)objcopy
+
+CFLAGS = -march=rv32imac -mabi=ilp32 -mcmodel=medlow -O1 -g
+LDFLAGS = -T link.ld -nostartfiles
+
+TARGET = uart_reg_test
+SOURCE = uart_reg_test.c
+
+all: $(TARGET).elf $(TARGET).hex
+
+$(TARGET).o: $(SOURCE)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+startup.o: startup.S
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(TARGET).elf: startup.o $(TARGET).o
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
+$(TARGET).hex: $(TARGET).elf
+	$(OBJCOPY) -j .text -j .data -O binary --set-start 0x80000000 $< $(TARGET).bin
+	od -t x8 -w8 -v $(TARGET).bin | cut -c 9- | grep -v "^$$" > $@
+
+clean:
+	rm -f *.o *.elf *.hex *.bin
+
+.PHONY: all clean 

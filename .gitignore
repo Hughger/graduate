@@ -1,0 +1,82 @@
+# Editors and local metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# Scala / SBT / Metals
+.bsp/
+.metals/
+target/
+project/target/
+project/project/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Vivado generated state
+.Xil/
+*.cache/
+*.runs/
+*.gen/
+*.hw/
+*.sim/
+*.ip_user_files/
+
+# Simulation output
+work/
+transcript
+*.wlf
+*.vcd
+*.fst
+
+# Local build and release output
+artifacts/
+dist/
+build/
+*.log
+
+# SDK overlay build outputs
+integrations/hbird-sdk-overlay/**/axi_test.bin
+integrations/hbird-sdk-overlay/**/axi_test.elf
+integrations/hbird-sdk-overlay/**/axi_test.hex
+integrations/hbird-sdk-overlay/**/axi_test.map
+integrations/hbird-sdk-overlay/**/axi_test.verilog
+integrations/hbird-sdk-overlay/**/*.o
+
+# Archives are generated separately, not maintained in-tree
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+
+# Graduate workspace: reproducible local outputs
+.worktrees/
+tmp/
+accelerator/generated/
+accelerator/test_run_dir/
+accelerator/c/axi_test/*.bin
+accelerator/c/axi_test/*.elf
+accelerator/c/axi_test/*.hex
+accelerator/c/axi_test/*.map
+accelerator/c/axi_test/*.dump
+accelerator/c/axi_test/*.verilog
+accelerator/c/axi_test/*.o
+accelerator/c/apb_test/*.bin
+accelerator/c/apb_test/*.elf
+accelerator/c/apb_test/*.hex
+accelerator/c/apb_test/*.map
+accelerator/c/apb_test/*.dump
+accelerator/c/apb_test/*.verilog
+accelerator/c/apb_test/*.o
+accelerator/diffusion/artifacts/
+accelerator/diffusion/results/raw/
+accelerator/fpga/AXKU15/diffusion/vivado/
+*.bit
+*.ltx
+.superpowers/

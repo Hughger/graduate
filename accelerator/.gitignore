@@ -1,0 +1,35 @@
+  # 忽略所有二进制文件和编译产物
+  *.class
+  *.o
+  *.d
+  *.fir
+  *.vcd
+  *.vvp
+  *.elf
+  *.bin
+  *.map
+  *.dump
+  *.verilog
+   
+   # 忽略目录
+   target/
+   test_run_dir/
+   project/
+   build/
+   waves/
+   vsim/
+   
+   # 忽略特定文件
+   hs_err_pid*.log
+   *.jou
+   *.pb
+   conv_result.csv
+   regression
+   
+   # 忽略 IDE 配置文件
+   .idea/
+   .vscode/ 
+   
+   riscv-tools/prebuilt_tools/prefix/*
+   doc/build
+   .history
