@@ -9,6 +9,7 @@ import org.scalatest.matchers.should.Matchers
 import FLOOD_Accelerator.core.Config
 import firrtl.options.TargetDirAnnotation
 import chiseltest.VerilatorBackendAnnotation
+import chiseltest.simulator.{VerilatorCFlags, VerilatorFlags}
 import scala.util.Random
 import FLOOD_Accelerator.utils.DataConverter
 import java.io.File
@@ -16,6 +17,9 @@ import scala.collection.mutable.Queue
 
 class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with Matchers {
   behavior of "MacMachineWrapper"
+
+  private val traceEnabled = sys.props.get("flood.wrapper.trace").contains("true")
+  private def trace(message: => String): Unit = if (traceEnabled) println(message)
 
   // 写配置
   def writeConfig(dut: MacMachineWrapper, data: BigInt, addr: Int): Unit = {
@@ -29,7 +33,7 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
   // 触发一次运行：通过写 runProcessId 非0
   def triggerRun(dut: MacMachineWrapper): Unit = {
     writeConfig(dut, 1, Config.runProcessId)
-    println(s"triggerRun")
+    trace(s"triggerRun")
   }
 
   // 写特征图（按 MacMachineTest 的总线打包方式）
@@ -86,7 +90,7 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
           packedData |= shiftedValue
         }
         updateFeatureMapBus(dut, tileId, addr, packedData)
-        println(s"tileId=${tileId}, row = ${r}, addrIn = ${((tileId & ((1<<Config.idWidth)-1)) << log2Ceil(Config.rowSize)) | (addr & ((1<<log2Ceil(Config.rowSize))-1))}, startCol=${startCol}, endCol=${endCol-1}, featureMapValues=[${featureMapValues.mkString(", ")}], packed=0x${packedData.toString(16)}")
+        trace(s"tileId=${tileId}, row = ${r}, addrIn = ${((tileId & ((1<<Config.idWidth)-1)) << log2Ceil(Config.rowSize)) | (addr & ((1<<log2Ceil(Config.rowSize))-1))}, startCol=${startCol}, endCol=${endCol-1}, featureMapValues=[${featureMapValues.mkString(", ")}], packed=0x${packedData.toString(16)}")
       }
     }
   }
@@ -94,7 +98,9 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
   // 测试用例
   it should "run MacMachineWrapper with pingpong SRAMs and done handshake" in {
     val annos = Seq(
-      WriteVcdAnnotation,
+      VerilatorBackendAnnotation,
+      VerilatorFlags(Seq("--output-split", "0")),
+      VerilatorCFlags(Seq("-O0")),
       TargetDirAnnotation("test_run_dir/MacMachine/MacMachineWrapper_basic")
     )
     test(new MacMachineWrapper).withAnnotations(annos) { dut =>
@@ -211,7 +217,7 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
         val addParam = i & 0xFFFF
         val bnPacked = (mulParam << 16) | addParam
         writeConfig(dut, bnPacked, Config.bnConfIdStart + i)
-        println(s"BN param write: idx=${i}, mul=${mulParam}, add=${addParam}, data=0x${bnPacked.toHexString}")
+        trace(s"BN param write: idx=${i}, mul=${mulParam}, add=${addParam}, data=0x${bnPacked.toHexString}")
       }
 
       // FSM/OutRouter 配置
@@ -248,8 +254,8 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
         val poolEn = if (actionEn) if (PoolEn) 1 else 0 else 0
         val actionMode = (dataFlowMode << 0) | ((if(isFinalCinIdx) 1 else 0) << 1) | (bnEn << 2) | (actEn << 3) | (poolEn << 4)
         // pre 打印所有参数
-        println(s"This run process: k = ${k}, cout = ${cout}, groupNum = ${groupNum}, groupSize = ${groupSize}, stride = ${stride}, planeWorkMode = ${planeWorkMode}, isFinalCinIdx = ${isFinalCinIdx}, bnEn = ${bnEn}, actEn = ${actEn}, poolEn = ${poolEn}")
-        println(s"cinIdx = ${cinIdx}, resolutionRowIdx = ${resolutionRowIdx}, resolutionColIdx = ${resolutionColIdx}")
+        trace(s"This run process: k = ${k}, cout = ${cout}, groupNum = ${groupNum}, groupSize = ${groupSize}, stride = ${stride}, planeWorkMode = ${planeWorkMode}, isFinalCinIdx = ${isFinalCinIdx}, bnEn = ${bnEn}, actEn = ${actEn}, poolEn = ${poolEn}")
+        trace(s"cinIdx = ${cinIdx}, resolutionRowIdx = ${resolutionRowIdx}, resolutionColIdx = ${resolutionColIdx}")
         val kernelBlockKWidth = log2Ceil(Config.maxKernelBlockK)
         val groupSizeWidth = log2Ceil(Config.maxGroupSize)
         val groupNumWidth = log2Ceil(Config.maxGroupNum)
@@ -280,8 +286,8 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
         val jointQ1 = Queue[SramReadRequest]()
         val jointQ2 = Queue[SramReadRequest]()
         
-        println(s"Normal配置: k=${k-1}, groupSize=${groupSize-1}, groupNum=${groupNum-1}, cout=${cout-1}, stride=${stride}")
-        println(s"normalConfig = 0x${normalConfig.toString(16)} (${normalConfig})")
+        trace(s"Normal配置: k=${k-1}, groupSize=${groupSize-1}, groupNum=${groupNum-1}, cout=${cout-1}, stride=${stride}")
+        trace(s"normalConfig = 0x${normalConfig.toString(16)} (${normalConfig})")
         writeConfig(dut, normalConfig, Config.FSMRouterConfIdStart)
         
         // Special寄存器布局（更新后）：{remain, truncateEn[+1], truncateBits[+truncateBitsWidth], workMode, colIdx, cinIdx}
@@ -291,8 +297,8 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
                             (BigInt(resolutionColIdx) << cinIdxWidth) |
                             BigInt(cinIdx)
         
-        println(s"Special配置: cinIdx=${cinIdx}, resolutionColIdx=${resolutionColIdx}, workMode=${planeWorkMode}, truncateEn=${truncateEn}, truncateBits=${truncateBits}")
-        println(s"specialConfig = 0x${specialConfig.toString(16)} (${specialConfig})")
+        trace(s"Special配置: cinIdx=${cinIdx}, resolutionColIdx=${resolutionColIdx}, workMode=${planeWorkMode}, truncateEn=${truncateEn}, truncateBits=${truncateBits}")
+        trace(s"specialConfig = 0x${specialConfig.toString(16)} (${specialConfig})")
         writeConfig(dut, specialConfig, Config.FSMRouterConfIdEnd)
         
         // NVDLA REG配置
@@ -303,8 +309,8 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
                             (BigInt(kyIdx) << kernelBlockKWidth) |
                             BigInt(kxIdx)
         
-        println(s"NVDLA配置: kx=${nvdlaKx}, ky=${nvdlaKy}, featBlkWid=${nvdlaFeatBlkWid}, pixelPara=${nvdlaPixelPara}")
-        println(s"nvdlaRegConfig = 0x${nvdlaRegConfig.toString(16)} (${nvdlaRegConfig})")
+        trace(s"NVDLA配置: kx=${nvdlaKx}, ky=${nvdlaKy}, featBlkWid=${nvdlaFeatBlkWid}, pixelPara=${nvdlaPixelPara}")
+        trace(s"nvdlaRegConfig = 0x${nvdlaRegConfig.toString(16)} (${nvdlaRegConfig})")
         writeConfig(dut, nvdlaRegConfig, Config.nvdlaRegId)
         
         for (tileId <- 0 until tileSize) {
@@ -322,16 +328,19 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
                             (BigInt(if (outputPingpongFlag) 1 else 0) << (Config.configDataWidth - 3)) |
                             BigInt(actionMode)
         
-        println(s"Global配置: featurePingpong=${featurePingpongFlag}, weightPingpong=${weightPingpongFlag}, outputPingpong=${outputPingpongFlag}, actionMode=${actionMode}")
-        println(s"globalConfInfo = 0x${globalConfInfo.toString(16)} (${globalConfInfo})")
+        trace(s"Global配置: featurePingpong=${featurePingpongFlag}, weightPingpong=${weightPingpongFlag}, outputPingpong=${outputPingpongFlag}, actionMode=${actionMode}")
+        trace(s"globalConfInfo = 0x${globalConfInfo.toString(16)} (${globalConfInfo})")
         writeConfig(dut, globalConfInfo, Config.globalConfId)
         dut.clock.setTimeout(0)
         dut.clock.step(2)
 
         triggerRun(dut)
 
+        val maxRunCycles = sys.props.get("flood.wrapper.maxCycles").map(_.toInt).getOrElse(512)
+        var elapsedCycles = 0
         var localDone = false
-        while (!localDone && !dut.io.interrupts.errorInterrupt.peek().litToBoolean) {
+        var errorObserved = false
+        while (!localDone && !errorObserved && elapsedCycles < maxRunCycles) {
           // ---------- 权重SRAM读：按正确顺序处理（2级延迟） ----------
           // 1. Q2 输出到 DUT (先输出)
           if (wPingQ2.nonEmpty) {
@@ -342,7 +351,7 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
               packed |= (v << (i * dataWidth))
             }
             dut.io.weightSramReadPing.readData.poke(packed.U)
-            println(s"weightSramReadPing response: addr=${req.addr}, data=0x${req.data.mkString(", ")}")
+            trace(s"weightSramReadPing response: addr=${req.addr}, data=0x${req.data.mkString(", ")}")
           }
           if (wPongQ2.nonEmpty) {
             val req = wPongQ2.dequeue()
@@ -352,7 +361,7 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
               packed |= (v << (i * dataWidth))
             }
             dut.io.weightSramReadPong.readData.poke(packed.U)
-            println(s"weightSramReadPong response: addr=${req.addr}, data=0x${req.data.mkString(", ")}")
+            trace(s"weightSramReadPong response: addr=${req.addr}, data=0x${req.data.mkString(", ")}")
           }
           
           // 2. 推进队列：Q1->Q2 (然后推进)
@@ -385,13 +394,13 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
             val addr = dut.io.outputSramPing.writeAddress.peek().litValue.toInt
             val dataBusVal = dut.io.outputSramPing.writeData.peek().litValue
             if (addr < outputSramPingMem.length) outputSramPingMem(addr) = unpackWrite(dataBusVal)
-            println(s"outputSramPing write: addr=$addr, data=${outputSramPingMem(addr).mkString(", ")}")
+            trace(s"outputSramPing write: addr=$addr, data=${outputSramPingMem(addr).mkString(", ")}")
           }
           if (dut.io.outputSramPong.writeEnable.peek().litToBoolean) {
             val addr = dut.io.outputSramPong.writeAddress.peek().litValue.toInt
             val dataBusVal = dut.io.outputSramPong.writeData.peek().litValue
             if (addr < outputSramPongMem.length) outputSramPongMem(addr) = unpackWrite(dataBusVal)
-            println(s"outputSramPong write: addr=$addr, data=${outputSramPongMem(addr).mkString(", ")}")
+            trace(s"outputSramPong write: addr=$addr, data=${outputSramPongMem(addr).mkString(", ")}")
           }
           if (dut.io.outputJointSram.writeEnable.peek().litToBoolean) {
             val addr = dut.io.outputJointSram.writeAddress.peek().litValue.toInt
@@ -399,17 +408,17 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
             // outputJointSram 应该写入到 jointSramMem，而不是 activeOutputSramMem
             if (addr < outputJointSramMem.length){
               outputJointSramMem(addr) = unpackWrite(dataBusVal)
-              println(s"outputJointSram write: addr=$addr, data=${outputJointSramMem(addr).mkString(", ")}")
+              trace(s"outputJointSram write: addr=$addr, data=${outputJointSramMem(addr).mkString(", ")}")
             }
             else {
-              println(s"outputJointSram write: addr=$addr, data=out of range")
+              trace(s"outputJointSram write: addr=$addr, data=out of range")
             }
           }
           if (dut.io.jointSram.writeEnable.peek().litToBoolean) {
             val addr = dut.io.jointSram.writeAddress.peek().litValue.toInt
             val dataBusVal = dut.io.jointSram.writeData.peek().litValue
             if (addr < jointSramMem.length) jointSramMem(addr) = unpackWrite(dataBusVal)
-            println(s"jointSram write: addr=$addr, data=${jointSramMem(addr).mkString(", ")}")
+            trace(s"jointSram write: addr=$addr, data=${jointSramMem(addr).mkString(", ")}")
           }
 
           def packRead(vec: Array[Int], elemW: Int): BigInt = {
@@ -425,22 +434,22 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
           if (oPingQ2.nonEmpty) {
             val req = oPingQ2.dequeue()
             dut.io.outputSramPing.readData.poke(packRead(req.data, Config.outputBufferTmpWidth).U)
-            println(s"outputSramPing read: addr=${req.addr}, data=${req.data.mkString(", ")}")
+            trace(s"outputSramPing read: addr=${req.addr}, data=${req.data.mkString(", ")}")
           }
           if (oPongQ2.nonEmpty) {
             val req = oPongQ2.dequeue()
             dut.io.outputSramPong.readData.poke(packRead(req.data, Config.outputBufferTmpWidth).U)
-            println(s"outputSramPong read: addr=${req.addr}, data=${req.data.mkString(", ")}")
+            trace(s"outputSramPong read: addr=${req.addr}, data=${req.data.mkString(", ")}")
           }
           if (oJointQ2.nonEmpty) {
             val req = oJointQ2.dequeue()
             dut.io.outputJointSram.readData.poke(packRead(req.data, Config.outputBufferTmpWidth).U)
-            println(s"outputJointSram read: addr=${req.addr}, data=${req.data.mkString(", ")}")
+            trace(s"outputJointSram read: addr=${req.addr}, data=${req.data.mkString(", ")}")
           }
           if (jointQ2.nonEmpty) {
             val req = jointQ2.dequeue()
             dut.io.jointSram.readData.poke(packRead(req.data, Config.outputBufferTmpWidth).U)
-            println(s"jointSram read: addr=${req.addr}, data=${req.data.mkString(", ")}")
+            trace(s"jointSram read: addr=${req.addr}, data=${req.data.mkString(", ")}")
           }
           
           // 2. 推进队列：Q1->Q2 (然后推进)
@@ -472,13 +481,21 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
             oPongQ1.enqueue(SramReadRequest(addr, vec))
           }
 
+          dut.clock.step(1)
+          elapsedCycles += 1
+          errorObserved ||= dut.io.interrupts.errorInterrupt.peek().litToBoolean
           if (dut.io.interrupts.doneInterrupt.peek().litToBoolean) {
             localDone = true
-            println("MacMachineWrapper done interrupt triggered")
+            trace(s"MacMachineWrapper done interrupt triggered after ${elapsedCycles} cycles")
           }
-          dut.clock.step(1)
-          println("--------------------------------")
+          trace("--------------------------------")
         }
+
+        assert(!errorObserved,
+          s"MacMachineWrapper raised errorInterrupt after ${elapsedCycles} cycles")
+        assert(localDone,
+          s"MacMachineWrapper timed out after ${maxRunCycles} cycles; " +
+            s"doneInterrupt=${dut.io.interrupts.doneInterrupt.peek().litToBoolean}")
 
         // 清中断
         writeConfig(dut, 1, Config.interruptFreshId)
@@ -516,14 +533,14 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
             // 选择当前激活的 outputsram 导出
             // 打印当前乒乓sram的选择情况
             if (!outputPingpongFlag) {
-              println("当前使用的是乒outputSram")
+              trace("当前使用的是乒outputSram")
             } else {
-              println("当前使用的是乓outputSram")
+              trace("当前使用的是乓outputSram")
             }
                       
             DataConverter.printOutputSramResults(
               activeOutputSramMem,
-              new File("src/python/actual_output_results.csv").getAbsolutePath,
+              new File("test_run_dir/MacMachine/MacMachineWrapper_basic/actual_output_results.csv").getAbsolutePath,
               cout = cout,
               k = k,
               groupNum = groupNum,
@@ -533,7 +550,7 @@ class MacMachineWrapperTest extends AnyFlatSpec with ChiselScalatestTester with 
             )
             DataConverter.printJointSramData(
               jointSramMem,
-              new File("src/python/actual_joint_results.csv").getAbsolutePath,
+              new File("test_run_dir/MacMachine/MacMachineWrapper_basic/actual_joint_results.csv").getAbsolutePath,
               cout = cout,
               k = k,
               colSize = colSize
