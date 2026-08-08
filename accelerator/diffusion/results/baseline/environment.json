@@ -1,5 +1,5 @@
 {
-  "java": "unavailable",
+  "java": "openjdk version \"17.0.20\" 2026-07-21",
   "legacy_build_sbt": "build.sbt",
   "legacy_config": {
     "colSize": 32,
@@ -12,7 +12,7 @@
   },
   "numpy": "2.3.5",
   "python": "3.12.13",
-  "sbt": "unavailable",
+  "sbt": "2.0.6",
   "torch": "unavailable",
   "vivado": "vivado v2024.2 (64-bit)"
 }
