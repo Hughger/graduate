@@ -378,6 +378,42 @@ class MACTreeFlood(
   
   
   // 第一级流水线：执行乘法并初步累加
+  if (pipeline == 1) {
+    switch(stageStates(0)) {
+      is(idle) {
+        stageCounters(0) := 0.U
+        when(io.inB.fire) {
+          inputBReg := io.inB.bits
+          accReg := 0.S
+          stageStates(0) := computing
+        }
+      }
+      is(computing) {
+        val processInThisCycle = paral / tLatency
+        when(stageCounters(0) < tLatency.U) {
+          val baseIdx = (processInThisCycle.U * stageCounters(0))(log2Ceil(paral) - 1, 0)
+          val partialSum = VecInit((0 until processInThisCycle).map { offset =>
+            io.inA(baseIdx + offset.U) * inputBReg(baseIdx + offset.U)
+          }).reduce(_ +& _)
+          when(stageCounters(0) === 0.U) {
+            accReg := partialSum.asSInt
+          }.otherwise {
+            accReg := (accReg + partialSum).asSInt
+          }
+          stageCounters(0) := stageCounters(0) + 1.U
+        }.otherwise {
+          stageStates(0) := outputting
+        }
+      }
+      is(outputting) {
+        outputFifo.io.enq.bits := accReg(tmpDataWidth - 1, tmpDataWidth - outputWidth).asSInt
+        outputFifo.io.enq.valid := true.B
+        when(outputFifo.io.enq.fire) {
+          stageStates(0) := idle
+        }
+      }
+    }
+  } else {
   switch(stageStates(0)) {
     is(idle) {
       stageCounters(0) := 0.U
@@ -491,6 +527,7 @@ class MACTreeFlood(
     
   
   // 连接输出FIFO到外部接口
+  }
   io.out.bits := outputFifo.io.deq.bits
   io.out.valid := outputFifo.io.deq.valid
   outputFifo.io.deq.ready := io.out.ready
