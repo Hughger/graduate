@@ -1,0 +1,20 @@
+{
+  "model": "stable-diffusion-v1-5",
+  "group_norm_groups": 32,
+  "activation_layout": "NCHW",
+  "channel_block": 32,
+  "kernel": [3, 3],
+  "stride": 1,
+  "supported_shapes": [
+    [1, 320, 64, 64],
+    [1, 640, 32, 32],
+    [1, 1280, 16, 16],
+    [1, 1280, 8, 8]
+  ],
+  "capture": {
+    "dtype": "float16",
+    "timestep": 500,
+    "seed": 921,
+    "local_files_only": true
+  }
+}
