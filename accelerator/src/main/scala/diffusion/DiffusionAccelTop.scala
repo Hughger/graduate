@@ -31,6 +31,7 @@ class DiffusionAccelTop extends Module {
   val memoryTransfer = Module(new MigAppTransfer)
   val memoryArbiter = Module(new MigAppRequestArbiter)
   val tensorReadDma = Module(new TensorReadDma)
+  val tensorLoadBuffer = Module(new TensorLoadBuffer(4096))
   val tensorWriteDma = Module(new TensorWriteDma)
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
@@ -43,7 +44,7 @@ class DiffusionAccelTop extends Module {
   phaseDma.io.phase := scheduler.io.phase
   phaseDma.io.externalPhaseDone := io.phaseDone
   phaseDma.io.readCommand <> io.tensorReadCommand
-  phaseDma.io.readDone := tensorReadDma.io.done
+  phaseDma.io.readDone := tensorLoadBuffer.io.done
   phaseDma.io.writeCommand <> io.tensorWriteCommand
   phaseDma.io.writeDone := tensorWriteDma.io.done
 
@@ -52,8 +53,17 @@ class DiffusionAccelTop extends Module {
   io.memoryDone := memoryArbiter.io.client0Done
 
   tensorReadDma.io.command <> phaseDma.io.readDmaCommand
-  io.tensorReadData <> tensorReadDma.io.data
-  io.tensorReadDone := tensorReadDma.io.done
+  tensorLoadBuffer.io.start := phaseDma.io.readDmaCommand.fire
+  tensorLoadBuffer.io.sourceDone := tensorReadDma.io.done
+  tensorLoadBuffer.io.input.valid := tensorReadDma.io.data.valid && io.tensorReadData.ready
+  tensorLoadBuffer.io.input.bits := tensorReadDma.io.data.bits
+  io.tensorReadData.valid := tensorReadDma.io.data.valid && tensorLoadBuffer.io.input.ready
+  io.tensorReadData.bits := tensorReadDma.io.data.bits
+  tensorReadDma.io.data.ready := tensorLoadBuffer.io.input.ready && io.tensorReadData.ready
+  io.tensorReadDone := tensorLoadBuffer.io.done
+  tensorLoadBuffer.io.readReq.valid := false.B
+  tensorLoadBuffer.io.readReq.bits := 0.U
+  tensorLoadBuffer.io.readResp.ready := true.B
   memoryArbiter.io.client1Request <> tensorReadDma.io.memoryRequest
   tensorReadDma.io.memoryResponse <> memoryArbiter.io.client1Response
 

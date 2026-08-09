@@ -62,6 +62,7 @@ class DiffusionAccelTopTensorDmaSpec extends AnyFlatSpec with ChiselScalatestTes
       dut.io.tensorReadData.bits.expect("hface".U)
       dut.io.tensorReadData.ready.poke(true.B)
       dut.clock.step()
+      dut.clock.step(32)
       dut.io.tensorReadDone.expect(true.B)
       dut.clock.step()
       dut.io.phase.expect(BlockPhase.Gn1Stats.U)
