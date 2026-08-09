@@ -14,10 +14,12 @@ class DiffusionAccelTop extends Module {
     val memoryRequest = Flipped(Decoupled(new MigAppRequest))
     val memoryResponse = Decoupled(UInt(512.W))
     val memoryDone = Output(Bool())
-    // TensorReadDma is the first scheduler-side MIG client.
     val tensorReadCommand = Flipped(Decoupled(new TensorReadCommand))
     val tensorReadData = Decoupled(UInt(512.W))
     val tensorReadDone = Output(Bool())
+    val tensorWriteCommand = Flipped(Decoupled(new TensorWriteCommand))
+    val tensorWriteData = Flipped(Decoupled(UInt(512.W)))
+    val tensorWriteDone = Output(Bool())
     // A board wrapper connects this seam to c0_ddr4_app_*.
     val mig = new MigAppPort
   })
@@ -26,6 +28,7 @@ class DiffusionAccelTop extends Module {
   val memoryTransfer = Module(new MigAppTransfer)
   val memoryArbiter = Module(new MigAppRequestArbiter)
   val tensorReadDma = Module(new TensorReadDma)
+  val tensorWriteDma = Module(new TensorWriteDma)
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
   scheduler.io.start := control.io.start
@@ -43,6 +46,13 @@ class DiffusionAccelTop extends Module {
   io.tensorReadDone := tensorReadDma.io.done
   memoryArbiter.io.client1Request <> tensorReadDma.io.memoryRequest
   tensorReadDma.io.memoryResponse <> memoryArbiter.io.client1Response
+
+  tensorWriteDma.io.command <> io.tensorWriteCommand
+  tensorWriteDma.io.data <> io.tensorWriteData
+  io.tensorWriteDone := tensorWriteDma.io.done
+  memoryArbiter.io.client2Request <> tensorWriteDma.io.memoryRequest
+  memoryArbiter.io.client2Response.ready := true.B
+  tensorWriteDma.io.memoryDone := memoryArbiter.io.client2Done
 
   memoryTransfer.io.request <> memoryArbiter.io.memoryRequest
   memoryArbiter.io.memoryResponse <> memoryTransfer.io.response
