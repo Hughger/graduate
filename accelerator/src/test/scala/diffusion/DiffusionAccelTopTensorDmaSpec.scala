@@ -17,6 +17,9 @@ class DiffusionAccelTopTensorDmaSpec extends AnyFlatSpec with ChiselScalatestTes
     dut.io.activationVector.ready.poke(false.B)
     dut.io.gn1StatsCommand.valid.poke(false.B)
     dut.io.gn1Stats.ready.poke(false.B)
+    dut.io.gn1ConvCommand.valid.poke(false.B)
+    dut.io.gn1ConvWeightWrite.valid.poke(false.B)
+    dut.io.gn1ConvOutput.ready.poke(false.B)
     dut.io.tensorWriteCommand.valid.poke(false.B)
     dut.io.tensorWriteData.valid.poke(false.B)
     dut.io.mig.rdy.poke(false.B)
@@ -81,6 +84,29 @@ class DiffusionAccelTopTensorDmaSpec extends AnyFlatSpec with ChiselScalatestTes
       dut.io.gn1StatsDone.expect(true.B)
       dut.clock.step()
       dut.io.phase.expect(BlockPhase.Gn1Conv1.U)
+      for (channel <- 0 until 32) {
+        dut.io.gn1ConvWeightWrite.bits.row.poke(channel.U)
+        dut.io.gn1ConvWeightWrite.bits.column.poke(channel.U)
+        dut.io.gn1ConvWeightWrite.bits.data.poke(1.S)
+        dut.io.gn1ConvWeightWrite.valid.poke(true.B)
+        dut.clock.step()
+      }
+      dut.io.gn1ConvWeightWrite.valid.poke(false.B)
+      dut.io.gn1ConvCommand.bits.baseAddress.poke(0.U)
+      dut.io.gn1ConvCommand.bits.vectors.poke(1.U)
+      dut.io.gn1ConvCommand.valid.poke(true.B)
+      dut.clock.step()
+      dut.io.gn1ConvCommand.valid.poke(false.B)
+      dut.clock.step(70)
+      dut.io.gn1ConvOutput.valid.expect(true.B)
+      // FLOOD MAC consumes W8A8, so this is the low INT8 lane of 0xFACE.
+      dut.io.gn1ConvOutput.bits(0).expect((-50).S)
+      for (lane <- 1 until 32) { dut.io.gn1ConvOutput.bits(lane).expect(0.S) }
+      dut.io.gn1ConvOutput.ready.poke(true.B)
+      dut.clock.step()
+      dut.io.gn1ConvDone.expect(true.B)
+      dut.clock.step()
+      dut.io.phase.expect(BlockPhase.Gn2Stats.U)
     }
   }
 }
