@@ -10,16 +10,22 @@ class DiffusionAccelTop extends Module {
     val phase = Output(UInt(3.W))
     val busy = Output(Bool())
     val done = Output(Bool())
-    // Exposes the controller-to-DDR seam while TensorDma is being integrated
-    // with the block scheduler. A board wrapper connects `mig` to c0_ddr4_app_*.
+    // Debug/control access shares the physical MIG transaction engine with DMA.
     val memoryRequest = Flipped(Decoupled(new MigAppRequest))
     val memoryResponse = Decoupled(UInt(512.W))
     val memoryDone = Output(Bool())
+    // TensorReadDma is the first scheduler-side MIG client.
+    val tensorReadCommand = Flipped(Decoupled(new TensorReadCommand))
+    val tensorReadData = Decoupled(UInt(512.W))
+    val tensorReadDone = Output(Bool())
+    // A board wrapper connects this seam to c0_ddr4_app_*.
     val mig = new MigAppPort
   })
   val control = Module(new AxiLiteControl)
   val scheduler = Module(new BlockScheduler)
   val memoryTransfer = Module(new MigAppTransfer)
+  val memoryArbiter = Module(new MigAppRequestArbiter)
+  val tensorReadDma = Module(new TensorReadDma)
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
   scheduler.io.start := control.io.start
@@ -28,9 +34,19 @@ class DiffusionAccelTop extends Module {
   io.busy := scheduler.io.busy
   io.done := scheduler.io.done
 
-  memoryTransfer.io.request <> io.memoryRequest
-  io.memoryResponse <> memoryTransfer.io.response
-  io.memoryDone := memoryTransfer.io.done
+  memoryArbiter.io.client0Request <> io.memoryRequest
+  io.memoryResponse <> memoryArbiter.io.client0Response
+  io.memoryDone := memoryArbiter.io.client0Done
+
+  tensorReadDma.io.command <> io.tensorReadCommand
+  io.tensorReadData <> tensorReadDma.io.data
+  io.tensorReadDone := tensorReadDma.io.done
+  memoryArbiter.io.client1Request <> tensorReadDma.io.memoryRequest
+  tensorReadDma.io.memoryResponse <> memoryArbiter.io.client1Response
+
+  memoryTransfer.io.request <> memoryArbiter.io.memoryRequest
+  memoryArbiter.io.memoryResponse <> memoryTransfer.io.response
+  memoryArbiter.io.memoryDone := memoryTransfer.io.done
 
   io.mig.en := memoryTransfer.io.app.en
   io.mig.cmd := memoryTransfer.io.app.cmd
