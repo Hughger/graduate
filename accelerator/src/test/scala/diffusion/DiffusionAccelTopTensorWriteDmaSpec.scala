@@ -23,9 +23,34 @@ class DiffusionAccelTopTensorWriteDmaSpec extends AnyFlatSpec with ChiselScalate
     dut.io.mig.rdDataEnd.poke(false.B)
   }
 
-  "DiffusionAccelTop" should "serve tensor-write DMA through the shared MIG transfer" in {
+  private def startAndReachStore(dut: DiffusionAccelTop): Unit = {
+    dut.io.axi.aw.bits.poke(0.U); dut.io.axi.aw.valid.poke(true.B)
+    dut.io.axi.w.bits.data.poke(1.U); dut.io.axi.w.bits.strb.poke("hf".U); dut.io.axi.w.valid.poke(true.B)
+    dut.io.axi.b.ready.poke(true.B)
+    dut.clock.step()
+    dut.io.axi.aw.valid.poke(false.B); dut.io.axi.w.valid.poke(false.B)
+    dut.clock.step()
+    dut.io.phase.expect(BlockPhase.LoadResidual.U)
+
+    // A zero-beat load still proves that LoadResidual is DMA-controlled.
+    dut.io.tensorReadCommand.bits.address.poke(0.U)
+    dut.io.tensorReadCommand.bits.beats.poke(0.U)
+    dut.io.tensorReadCommand.valid.poke(true.B)
+    dut.clock.step()
+    dut.io.tensorReadCommand.valid.poke(false.B)
+    dut.clock.step()
+    dut.io.phase.expect(BlockPhase.Gn1Stats.U)
+
+    dut.io.phaseDone.poke(true.B)
+    dut.clock.step(4)
+    dut.io.phaseDone.poke(false.B)
+    dut.io.phase.expect(BlockPhase.StoreOutput.U)
+  }
+
+  "DiffusionAccelTop" should "serve tensor-write DMA during StoreOutput through the shared MIG transfer" in {
     test(new DiffusionAccelTop) { dut =>
       idle(dut)
+      startAndReachStore(dut)
       dut.io.tensorWriteCommand.bits.address.poke("h440".U)
       dut.io.tensorWriteCommand.bits.beats.poke(1.U)
       dut.io.tensorWriteCommand.valid.poke(true.B)
@@ -51,6 +76,8 @@ class DiffusionAccelTopTensorWriteDmaSpec extends AnyFlatSpec with ChiselScalate
       dut.io.mig.wdfRdy.poke(false.B)
       dut.clock.step()
       dut.io.tensorWriteDone.expect(true.B)
+      dut.clock.step()
+      dut.io.done.expect(true.B)
     }
   }
 }

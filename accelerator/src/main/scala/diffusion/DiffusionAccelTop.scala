@@ -6,6 +6,7 @@ import chisel3.util._
 class DiffusionAccelTop extends Module {
   val io = IO(new Bundle {
     val axi = new AxiLitePort
+    // Completes compute-only scheduler phases; load/store are driven by DMA.
     val phaseDone = Input(Bool())
     val phase = Output(UInt(3.W))
     val busy = Output(Bool())
@@ -14,6 +15,7 @@ class DiffusionAccelTop extends Module {
     val memoryRequest = Flipped(Decoupled(new MigAppRequest))
     val memoryResponse = Decoupled(UInt(512.W))
     val memoryDone = Output(Bool())
+    // Accepted only in LoadResidual and StoreOutput, respectively.
     val tensorReadCommand = Flipped(Decoupled(new TensorReadCommand))
     val tensorReadData = Decoupled(UInt(512.W))
     val tensorReadDone = Output(Bool())
@@ -25,6 +27,7 @@ class DiffusionAccelTop extends Module {
   })
   val control = Module(new AxiLiteControl)
   val scheduler = Module(new BlockScheduler)
+  val phaseDma = Module(new DmaPhaseController)
   val memoryTransfer = Module(new MigAppTransfer)
   val memoryArbiter = Module(new MigAppRequestArbiter)
   val tensorReadDma = Module(new TensorReadDma)
@@ -32,22 +35,29 @@ class DiffusionAccelTop extends Module {
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
   scheduler.io.start := control.io.start
-  scheduler.io.phaseDone := io.phaseDone
+  scheduler.io.phaseDone := phaseDma.io.phaseDone
   io.phase := scheduler.io.phase
   io.busy := scheduler.io.busy
   io.done := scheduler.io.done
+
+  phaseDma.io.phase := scheduler.io.phase
+  phaseDma.io.externalPhaseDone := io.phaseDone
+  phaseDma.io.readCommand <> io.tensorReadCommand
+  phaseDma.io.readDone := tensorReadDma.io.done
+  phaseDma.io.writeCommand <> io.tensorWriteCommand
+  phaseDma.io.writeDone := tensorWriteDma.io.done
 
   memoryArbiter.io.client0Request <> io.memoryRequest
   io.memoryResponse <> memoryArbiter.io.client0Response
   io.memoryDone := memoryArbiter.io.client0Done
 
-  tensorReadDma.io.command <> io.tensorReadCommand
+  tensorReadDma.io.command <> phaseDma.io.readDmaCommand
   io.tensorReadData <> tensorReadDma.io.data
   io.tensorReadDone := tensorReadDma.io.done
   memoryArbiter.io.client1Request <> tensorReadDma.io.memoryRequest
   tensorReadDma.io.memoryResponse <> memoryArbiter.io.client1Response
 
-  tensorWriteDma.io.command <> io.tensorWriteCommand
+  tensorWriteDma.io.command <> phaseDma.io.writeDmaCommand
   tensorWriteDma.io.data <> io.tensorWriteData
   io.tensorWriteDone := tensorWriteDma.io.done
   memoryArbiter.io.client2Request <> tensorWriteDma.io.memoryRequest
