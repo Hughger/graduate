@@ -17,8 +17,11 @@ class DiffusionAccelTop extends Module {
     val memoryDone = Output(Bool())
     // Accepted only in LoadResidual and StoreOutput, respectively.
     val tensorReadCommand = Flipped(Decoupled(new TensorReadCommand))
-    val tensorReadData = Decoupled(UInt(512.W))
     val tensorReadDone = Output(Bool())
+    val activationReadCommand = Flipped(Decoupled(new TensorVectorReadCommand(12)))
+    val activationVector = Decoupled(Vec(32, SInt(16.W)))
+    val activationReadDone = Output(Bool())
+    val tensorBufferOccupancy = Output(UInt(13.W))
     val tensorWriteCommand = Flipped(Decoupled(new TensorWriteCommand))
     val tensorWriteData = Flipped(Decoupled(UInt(512.W)))
     val tensorWriteDone = Output(Bool())
@@ -31,7 +34,7 @@ class DiffusionAccelTop extends Module {
   val memoryTransfer = Module(new MigAppTransfer)
   val memoryArbiter = Module(new MigAppRequestArbiter)
   val tensorReadDma = Module(new TensorReadDma)
-  val tensorLoadBuffer = Module(new TensorLoadBuffer(4096))
+  val tensorComputeBuffer = Module(new TensorComputeBuffer(4096))
   val tensorWriteDma = Module(new TensorWriteDma)
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
@@ -44,7 +47,7 @@ class DiffusionAccelTop extends Module {
   phaseDma.io.phase := scheduler.io.phase
   phaseDma.io.externalPhaseDone := io.phaseDone
   phaseDma.io.readCommand <> io.tensorReadCommand
-  phaseDma.io.readDone := tensorLoadBuffer.io.done
+  phaseDma.io.readDone := tensorComputeBuffer.io.loadDone
   phaseDma.io.writeCommand <> io.tensorWriteCommand
   phaseDma.io.writeDone := tensorWriteDma.io.done
 
@@ -53,17 +56,14 @@ class DiffusionAccelTop extends Module {
   io.memoryDone := memoryArbiter.io.client0Done
 
   tensorReadDma.io.command <> phaseDma.io.readDmaCommand
-  tensorLoadBuffer.io.start := phaseDma.io.readDmaCommand.fire
-  tensorLoadBuffer.io.sourceDone := tensorReadDma.io.done
-  tensorLoadBuffer.io.input.valid := tensorReadDma.io.data.valid && io.tensorReadData.ready
-  tensorLoadBuffer.io.input.bits := tensorReadDma.io.data.bits
-  io.tensorReadData.valid := tensorReadDma.io.data.valid && tensorLoadBuffer.io.input.ready
-  io.tensorReadData.bits := tensorReadDma.io.data.bits
-  tensorReadDma.io.data.ready := tensorLoadBuffer.io.input.ready && io.tensorReadData.ready
-  io.tensorReadDone := tensorLoadBuffer.io.done
-  tensorLoadBuffer.io.readReq.valid := false.B
-  tensorLoadBuffer.io.readReq.bits := 0.U
-  tensorLoadBuffer.io.readResp.ready := true.B
+  tensorComputeBuffer.io.loadStart := phaseDma.io.readDmaCommand.fire
+  tensorComputeBuffer.io.dmaDone := tensorReadDma.io.done
+  tensorComputeBuffer.io.dmaData <> tensorReadDma.io.data
+  io.tensorReadDone := tensorComputeBuffer.io.loadDone
+  tensorComputeBuffer.io.vectorCommand <> io.activationReadCommand
+  io.activationVector <> tensorComputeBuffer.io.activation
+  io.activationReadDone := tensorComputeBuffer.io.vectorDone
+  io.tensorBufferOccupancy := tensorComputeBuffer.io.occupancy
   memoryArbiter.io.client1Request <> tensorReadDma.io.memoryRequest
   tensorReadDma.io.memoryResponse <> memoryArbiter.io.client1Response
 
