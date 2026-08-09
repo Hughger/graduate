@@ -38,7 +38,7 @@ class DiffusionAccelTopTensorWriteDmaSpec extends AnyFlatSpec with ChiselScalate
     dut.io.tensorReadCommand.valid.poke(true.B)
     dut.clock.step()
     dut.io.tensorReadCommand.valid.poke(false.B)
-    dut.clock.step()
+    dut.clock.step(2)
     dut.io.phase.expect(BlockPhase.Gn1Stats.U)
 
     dut.io.phaseDone.poke(true.B)
