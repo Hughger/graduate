@@ -21,6 +21,10 @@ class DiffusionAccelTop extends Module {
     val activationReadCommand = Flipped(Decoupled(new TensorVectorReadCommand(12)))
     val activationVector = Decoupled(Vec(32, SInt(16.W)))
     val activationReadDone = Output(Bool())
+    // GN1 owns the statistics vector stream while this phase is active.
+    val gn1StatsCommand = Flipped(Decoupled(new TensorVectorReadCommand(12)))
+    val gn1Stats = Decoupled(new GroupStats)
+    val gn1StatsDone = Output(Bool())
     val tensorBufferOccupancy = Output(UInt(13.W))
     val tensorWriteCommand = Flipped(Decoupled(new TensorWriteCommand))
     val tensorWriteData = Flipped(Decoupled(UInt(512.W)))
@@ -35,11 +39,17 @@ class DiffusionAccelTop extends Module {
   val memoryArbiter = Module(new MigAppRequestArbiter)
   val tensorReadDma = Module(new TensorReadDma)
   val tensorComputeBuffer = Module(new TensorComputeBuffer(4096))
+  val vectorReaderArbiter = Module(new TensorVectorReaderArbiter(12, 32))
+  val gn1StatsEngine = Module(new GroupNormStatsEngine(32))
   val tensorWriteDma = Module(new TensorWriteDma)
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
   scheduler.io.start := control.io.start
-  scheduler.io.phaseDone := phaseDma.io.phaseDone
+  scheduler.io.phaseDone := Mux(
+    scheduler.io.phase === BlockPhase.Gn1Stats.U,
+    gn1StatsEngine.io.done,
+    phaseDma.io.phaseDone
+  )
   io.phase := scheduler.io.phase
   io.busy := scheduler.io.busy
   io.done := scheduler.io.done
@@ -60,9 +70,24 @@ class DiffusionAccelTop extends Module {
   tensorComputeBuffer.io.dmaDone := tensorReadDma.io.done
   tensorComputeBuffer.io.dmaData <> tensorReadDma.io.data
   io.tensorReadDone := tensorComputeBuffer.io.loadDone
-  tensorComputeBuffer.io.vectorCommand <> io.activationReadCommand
-  io.activationVector <> tensorComputeBuffer.io.activation
-  io.activationReadDone := tensorComputeBuffer.io.vectorDone
+  vectorReaderArbiter.io.debugCommand <> io.activationReadCommand
+  io.activationVector <> vectorReaderArbiter.io.debugVector
+  io.activationReadDone := vectorReaderArbiter.io.debugDone
+  vectorReaderArbiter.io.readerCommand <> tensorComputeBuffer.io.vectorCommand
+  vectorReaderArbiter.io.readerVector <> tensorComputeBuffer.io.activation
+  vectorReaderArbiter.io.readerDone := tensorComputeBuffer.io.vectorDone
+
+  val acceptGn1StatsCommand = scheduler.io.phase === BlockPhase.Gn1Stats.U &&
+    io.gn1StatsCommand.valid && gn1StatsEngine.io.command.ready
+  vectorReaderArbiter.io.statsCommand.valid := acceptGn1StatsCommand
+  vectorReaderArbiter.io.statsCommand.bits := io.gn1StatsCommand.bits
+  gn1StatsEngine.io.command.valid := vectorReaderArbiter.io.statsCommand.fire
+  gn1StatsEngine.io.command.bits.vectors := io.gn1StatsCommand.bits.vectors
+  io.gn1StatsCommand.ready := scheduler.io.phase === BlockPhase.Gn1Stats.U &&
+    vectorReaderArbiter.io.statsCommand.ready && gn1StatsEngine.io.command.ready
+  gn1StatsEngine.io.input <> vectorReaderArbiter.io.statsVector
+  io.gn1Stats <> gn1StatsEngine.io.stats
+  io.gn1StatsDone := gn1StatsEngine.io.done
   io.tensorBufferOccupancy := tensorComputeBuffer.io.occupancy
   memoryArbiter.io.client1Request <> tensorReadDma.io.memoryRequest
   tensorReadDma.io.memoryResponse <> memoryArbiter.io.client1Response
