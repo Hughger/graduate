@@ -27,6 +27,7 @@ class DiffusionAccelTop extends Module {
     val gn1StatsDone = Output(Bool())
     // GN1 convolution consumes tensor vectors after GN1 statistics complete.
     val gn1ConvCommand = Flipped(Decoupled(new TensorVectorReadCommand(12)))
+    val gn1ConvShift = Input(UInt(4.W))
     val gn1ConvWeightWrite = Flipped(Decoupled(new ConvWeightWrite))
     val gn1ConvOutput = Decoupled(Vec(32, SInt(32.W)))
     val gn1ConvDone = Output(Bool())
@@ -47,6 +48,7 @@ class DiffusionAccelTop extends Module {
   val vectorReaderArbiter = Module(new TensorVectorReaderThreeWayArbiter(12, 32))
   val gn1StatsEngine = Module(new GroupNormStatsEngine(32))
   val gn1ConvEngine = Module(new ConvBatchEngine(DiffusionParams.sd15EightTile))
+  val gn1ConvRequantizer = Module(new VectorRequantizeInt16ToInt8(32))
   val tensorWriteDma = Module(new TensorWriteDma)
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
@@ -103,7 +105,9 @@ class DiffusionAccelTop extends Module {
   gn1ConvEngine.io.command.bits.vectors := io.gn1ConvCommand.bits.vectors
   io.gn1ConvCommand.ready := scheduler.io.phase === BlockPhase.Gn1Conv1.U &&
     vectorReaderArbiter.io.computeCommand.ready && gn1ConvEngine.io.command.ready
-  gn1ConvEngine.io.activation <> vectorReaderArbiter.io.computeVector
+  gn1ConvRequantizer.io.shift := io.gn1ConvShift
+  gn1ConvRequantizer.io.input <> vectorReaderArbiter.io.computeVector
+  gn1ConvEngine.io.activation <> gn1ConvRequantizer.io.output
   io.gn1ConvOutput <> gn1ConvEngine.io.output
   io.gn1ConvDone := gn1ConvEngine.io.done
   io.tensorBufferOccupancy := tensorComputeBuffer.io.occupancy

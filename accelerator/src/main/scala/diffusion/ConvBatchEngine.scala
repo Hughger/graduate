@@ -19,7 +19,7 @@ class ConvBatchEngine(p: DiffusionParams) extends Module {
   val io = IO(new Bundle {
     val command = Flipped(Decoupled(new ConvBatchCommand))
     val weightWrite = Flipped(Decoupled(new ConvWeightWrite))
-    val activation = Flipped(Decoupled(Vec(p.ciTile, SInt(p.activationWidth.W))))
+    val activation = Flipped(Decoupled(Vec(p.ciTile, SInt(p.dataWidth.W))))
     val output = Decoupled(Vec(p.coTile, SInt(p.accumWidth.W)))
     val busy = Output(Bool())
     val done = Output(Bool())

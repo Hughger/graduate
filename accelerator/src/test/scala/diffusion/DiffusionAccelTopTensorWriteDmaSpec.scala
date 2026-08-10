@@ -20,6 +20,7 @@ class DiffusionAccelTopTensorWriteDmaSpec extends AnyFlatSpec with ChiselScalate
     dut.io.gn1ConvCommand.valid.poke(false.B)
     dut.io.gn1ConvWeightWrite.valid.poke(false.B)
     dut.io.gn1ConvOutput.ready.poke(false.B)
+    dut.io.gn1ConvShift.poke(0.U)
     dut.io.tensorWriteCommand.valid.poke(false.B)
     dut.io.tensorWriteData.valid.poke(false.B)
     dut.io.mig.rdy.poke(false.B)
