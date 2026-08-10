@@ -17,6 +17,9 @@ class ConvToGroupNormStatsPath(p: DiffusionParams, resultDepth: Int) extends Mod
     val statsCommand = Flipped(Decoupled(new GroupNormStatsCommand))
     val stats = Decoupled(new GroupStats)
     val statsDone = Output(Bool())
+    val activationCommand = Flipped(Decoupled(new TensorVectorReadCommand(12)))
+    val activationOutput = Decoupled(Vec(p.coTile, SInt(16.W)))
+    val activationDone = Output(Bool())
   })
 
   val convInput = Module(new VectorRequantizeInt16ToInt8(p.ciTile))
@@ -45,14 +48,23 @@ class ConvToGroupNormStatsPath(p: DiffusionParams, resultDepth: Int) extends Mod
   when(conv.io.command.fire) { loaded := false.B }
   when(conv.io.done) { loaded := true.B }
 
-  val acceptStats = loaded && io.statsCommand.valid && statsEngine.io.command.ready
-  buffer.io.command.valid := acceptStats
-  buffer.io.command.bits.baseAddress := 0.U
-  buffer.io.command.bits.vectors := io.statsCommand.bits.vectors
-  statsEngine.io.command.valid := buffer.io.command.fire
+  val ownerStats = RegInit(false.B)
+  val selectStats = loaded && io.statsCommand.valid && statsEngine.io.command.ready
+  val selectActivation = loaded && !selectStats && io.activationCommand.valid
+  buffer.io.command.valid := selectStats || selectActivation
+  buffer.io.command.bits.baseAddress := Mux(selectStats, 0.U, io.activationCommand.bits.baseAddress)
+  buffer.io.command.bits.vectors := Mux(selectStats, io.statsCommand.bits.vectors, io.activationCommand.bits.vectors)
+  statsEngine.io.command.valid := buffer.io.command.fire && selectStats
   statsEngine.io.command.bits := io.statsCommand.bits
   io.statsCommand.ready := loaded && buffer.io.command.ready && statsEngine.io.command.ready
-  statsEngine.io.input <> buffer.io.output
+  io.activationCommand.ready := loaded && buffer.io.command.ready && !selectStats
+  statsEngine.io.input.valid := ownerStats && buffer.io.output.valid
+  statsEngine.io.input.bits := buffer.io.output.bits
+  io.activationOutput.valid := !ownerStats && buffer.io.output.valid
+  io.activationOutput.bits := buffer.io.output.bits
+  buffer.io.output.ready := Mux(ownerStats, statsEngine.io.input.ready, io.activationOutput.ready)
+  when(buffer.io.command.fire) { ownerStats := selectStats }
   io.stats <> statsEngine.io.stats
   io.statsDone := statsEngine.io.done
+  io.activationDone := !ownerStats && buffer.io.done
 }

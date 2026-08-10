@@ -9,6 +9,7 @@ class ConvToGroupNormStatsPathSpec extends AnyFlatSpec with ChiselScalatestTeste
     test(new ConvToGroupNormStatsPath(DiffusionParams.sd15EightTile, resultDepth = 4)) { dut =>
       dut.io.convCommand.valid.poke(false.B); dut.io.activation.valid.poke(false.B); dut.io.convOutput.ready.poke(true.B)
       dut.io.weightWrite.valid.poke(false.B); dut.io.statsCommand.valid.poke(false.B); dut.io.stats.ready.poke(false.B)
+      dut.io.activationCommand.valid.poke(false.B); dut.io.activationOutput.ready.poke(false.B)
       dut.io.convShift.poke(0.U); dut.io.resultShift.poke(0.U)
       dut.clock.step()
 
@@ -27,6 +28,12 @@ class ConvToGroupNormStatsPathSpec extends AnyFlatSpec with ChiselScalatestTeste
       dut.clock.step(2); dut.io.stats.valid.expect(true.B)
       dut.io.stats.bits.sum.expect((-16).S); dut.io.stats.bits.sumSquare.expect(2736.U); dut.io.stats.bits.count.expect(32.U)
       dut.io.stats.ready.poke(true.B); dut.clock.step(); dut.io.statsDone.expect(true.B)
+      dut.io.stats.ready.poke(false.B)
+      dut.io.activationCommand.bits.baseAddress.poke(0.U); dut.io.activationCommand.bits.vectors.poke(1.U)
+      dut.io.activationCommand.valid.poke(true.B); dut.clock.step(); dut.io.activationCommand.valid.poke(false.B)
+      dut.io.activationOutput.valid.expect(true.B)
+      for (lane <- 0 until 32) { dut.io.activationOutput.bits(lane).expect((lane - 16).S) }
+      dut.io.activationOutput.ready.poke(true.B); dut.clock.step(); dut.io.activationDone.expect(true.B)
     }
   }
 }
