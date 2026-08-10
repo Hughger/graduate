@@ -74,6 +74,7 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   val tensorWriteDma = Module(new TensorWriteDma)
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
+  control.io.perfCounters := perfMonitor.io.counters
   scheduler.io.start := control.io.start
   scheduler.io.phaseDone := MuxLookup(scheduler.io.phase, phaseDma.io.phaseDone, Seq(
     BlockPhase.Gn1Stats.U -> gn1StatsEngine.io.done,
@@ -90,7 +91,7 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   perfMonitor.io.macActive := scheduler.io.phase === BlockPhase.Gn1Conv1.U || scheduler.io.phase === BlockPhase.Gn2Conv2Residual.U
   perfMonitor.io.groupNormActive := scheduler.io.phase === BlockPhase.Gn1Stats.U || scheduler.io.phase === BlockPhase.Gn2Stats.U
   perfMonitor.io.stalled := false.B
-  perfMonitor.io.snapshot := io.perfSnapshot
+  perfMonitor.io.snapshot := io.perfSnapshot || control.io.perfSnapshot
   io.perfCounters := perfMonitor.io.counters
 
   phaseDma.io.phase := scheduler.io.phase
