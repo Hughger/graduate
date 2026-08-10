@@ -11,6 +11,8 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
     val phase = Output(UInt(3.W))
     val busy = Output(Bool())
     val done = Output(Bool())
+    val perfSnapshot = Input(Bool())
+    val perfCounters = Output(new PerfCounters)
     // Debug/control access shares the physical MIG transaction engine with DMA.
     val memoryRequest = Flipped(Decoupled(new MigAppRequest))
     val memoryResponse = Decoupled(UInt(512.W))
@@ -57,6 +59,7 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   })
   val control = Module(new AxiLiteControl)
   val scheduler = Module(new BlockScheduler)
+  val perfMonitor = Module(new PerfMonitor)
   val phaseDma = Module(new DmaPhaseController)
   val memoryTransfer = Module(new MigAppTransfer)
   val memoryArbiter = Module(new MigAppRequestArbiter)
@@ -81,6 +84,14 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   io.phase := scheduler.io.phase
   io.busy := scheduler.io.busy
   io.done := scheduler.io.done
+  perfMonitor.io.active := scheduler.io.busy
+  perfMonitor.io.readBytes := Mux(tensorReadDma.io.data.fire, 64.U(64.W), 0.U(64.W))
+  perfMonitor.io.writeBytes := Mux(tensorWriteDma.io.data.fire, 64.U(64.W), 0.U(64.W))
+  perfMonitor.io.macActive := scheduler.io.phase === BlockPhase.Gn1Conv1.U || scheduler.io.phase === BlockPhase.Gn2Conv2Residual.U
+  perfMonitor.io.groupNormActive := scheduler.io.phase === BlockPhase.Gn1Stats.U || scheduler.io.phase === BlockPhase.Gn2Stats.U
+  perfMonitor.io.stalled := false.B
+  perfMonitor.io.snapshot := io.perfSnapshot
+  io.perfCounters := perfMonitor.io.counters
 
   phaseDma.io.phase := scheduler.io.phase
   phaseDma.io.externalPhaseDone := io.phaseDone
