@@ -47,6 +47,19 @@ class Axku15BoardTest(unittest.TestCase):
         self.assertIn("PACKAGE_PIN AR32 [get_ports {c0_sys_clk_p}]", rendered)
         self.assertIn("PACKAGE_PIN AT32 [get_ports {c0_sys_clk_n}]", rendered)
 
+    def test_actual_accelerator_ooc_script_requires_generated_top(self) -> None:
+        script = (ROOT / "scripts" / "synth_diffusion_accel_top.tcl").read_text(encoding="utf-8")
+        self.assertIn("DiffusionAccelTop.v", script)
+        self.assertIn("synth_design -top DiffusionAccelTop", script)
+        self.assertIn("-mode out_of_context", script)
+        self.assertNotIn("write_bitstream", script)
+    def test_actual_accelerator_rtl_script_avoids_technology_mapping(self) -> None:
+        script = (ROOT / "scripts" / "elaborate_diffusion_accel_top.tcl").read_text(encoding="utf-8")
+        self.assertIn("DiffusionAccelTop.v", script)
+        self.assertIn("synth_design -top DiffusionAccelTop", script)
+        self.assertIn("-rtl", script)
+        self.assertNotIn("report_utilization", script)
+        self.assertNotIn("write_bitstream", script)
 
 if __name__ == "__main__":
     unittest.main()

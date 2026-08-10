@@ -39,3 +39,19 @@ DDR4 reference clock is `AR32/AT32`; it is emitted as `ddr4_ref_clk_p/n` and is 
 ## Verified implementation evidence
 
 The bring-up flow was run with Vivado 2024.2 on this repository revision. It completed synthesis, implementation and bitstream generation for `xcku15p-ffve1517-2-i` with zero DRC errors. At a 200 MHz constraint, the post-route setup WNS was **4.220 ns** (TNS 0.000 ns); the generated bitstream was 36,343,241 bytes. These numbers apply only to the small clock/LED smoke top, not to the future DDR4/MIG accelerator implementation. See [DDR4 MIG compatibility](docs/ddr4_mig_compatibility.md) before using the 64-bit candidate constraints; an 80-bit AXKU15 MIG remains unclosed.
+## Actual accelerator RTL validation
+
+`GenerateDiffusionAccelTopVerilog` emits the real `DiffusionAccelTop` rather
+than the lightweight `DiffusionContractTop`. The resulting Verilog keeps the
+AXI-Lite, DMA and MIG application-port seams and is intended for the board
+wrapper once the physical DDR4 controller is qualified.
+
+A bounded Vivado 2024.2 `synth_design -rtl` check on
+`xcku15p-ffve1517-2-i` completed RTL elaboration in 7 minutes 08 seconds at a
+5,256 MB peak memory footprint, then entered RTL optimization. It was stopped
+at the 10-minute safety limit, so it is evidence of successful RTL parsing and
+hierarchy elaboration only—not a completed synthesis, timing result or resource
+closure. The corresponding full OOC synthesis reached RTL component statistics
+but did not finish within a 30-minute limit. Use the checked-in scripts to
+repeat those bounded checks; do not claim AXKU15 implementation closure from
+these partial results.
