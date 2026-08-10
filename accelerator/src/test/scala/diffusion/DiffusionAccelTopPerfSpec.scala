@@ -35,11 +35,15 @@ class DiffusionAccelTopPerfSpec extends AnyFlatSpec with ChiselScalatestTester {
       write(DiffusionRegisterMap.Control, 1)
       dut.clock.step(3); dut.io.busy.expect(true.B)
       write(DiffusionRegisterMap.PerfSnapshot, 1)
+      val snappedCycles = dut.io.perfCounters.totalCycles.peek().litValue
+      assert(snappedCycles > 0)
+      dut.clock.step(4)
+      dut.io.perfCounters.totalCycles.expect(snappedCycles.U)
       dut.io.axi.ar.bits.poke(DiffusionRegisterMap.PerfTotalCyclesLo.U)
       dut.io.axi.ar.valid.poke(true.B); dut.io.axi.ar.ready.expect(true.B)
       dut.clock.step(); dut.io.axi.ar.valid.poke(false.B)
       dut.io.axi.r.valid.expect(true.B)
-      assert(dut.io.axi.r.bits.data.peek().litValue > 0)
+      dut.io.axi.r.bits.data.expect((snappedCycles & BigInt("ffffffff", 16)).U)
       dut.io.axi.r.ready.poke(true.B); dut.clock.step(); dut.io.axi.r.ready.poke(false.B)
     }
   }
