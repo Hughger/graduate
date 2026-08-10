@@ -67,6 +67,7 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   val convToGn2Stats = Module(new ConvToGroupNormStatsPath(DiffusionParams.sd15EightTile, resultDepth))
   val gn2ActivationPath = Module(new GroupNormActivationPath(32))
   val gn2ConvPath = Module(new Conv2ResidualPath(DiffusionParams.sd15EightTile))
+  val storeVectorBuffer = Module(new VectorResultBuffer(resultDepth, 32))
   val tensorWriteDma = Module(new TensorWriteDma)
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
@@ -160,14 +161,35 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   gn2ConvPath.io.temb := io.gn2Temb
   gn2ConvPath.io.residual := io.gn2Residual
   gn2ConvPath.io.addResidual := io.gn2AddResidual
-  io.gn2ConvOutput <> gn2ConvPath.io.output
+  io.gn2ConvOutput.valid := gn2ConvPath.io.output.valid
+  io.gn2ConvOutput.bits := gn2ConvPath.io.output.bits
+  storeVectorBuffer.io.input.valid := gn2ConvPath.io.output.valid && io.gn2ConvOutput.ready
+  storeVectorBuffer.io.input.bits := gn2ConvPath.io.output.bits
+  gn2ConvPath.io.output.ready := io.gn2ConvOutput.ready && storeVectorBuffer.io.input.ready
+  storeVectorBuffer.io.clear := gn2ConvPath.io.command.fire
   io.gn2ConvDone := gn2ConvPath.io.done
   io.tensorBufferOccupancy := tensorComputeBuffer.io.occupancy
   memoryArbiter.io.client1Request <> tensorReadDma.io.memoryRequest
   tensorReadDma.io.memoryResponse <> memoryArbiter.io.client1Response
 
   tensorWriteDma.io.command <> phaseDma.io.writeDmaCommand
-  tensorWriteDma.io.data <> io.tensorWriteData
+  val storeReadRequested = RegInit(false.B)
+  val storeBeats = Reg(UInt(16.W))
+  val useInternalStore = storeVectorBuffer.io.occupancy =/= 0.U
+  when(scheduler.io.phase =/= BlockPhase.StoreOutput.U) { storeReadRequested := false.B }
+  when(phaseDma.io.writeDmaCommand.fire && useInternalStore) {
+    storeReadRequested := true.B
+    storeBeats := phaseDma.io.writeDmaCommand.bits.beats
+  }
+  storeVectorBuffer.io.command.valid := storeReadRequested
+  storeVectorBuffer.io.command.bits.baseAddress := 0.U
+  storeVectorBuffer.io.command.bits.vectors := storeBeats
+  when(storeVectorBuffer.io.command.fire) { storeReadRequested := false.B }
+  val packedStoreVector = Cat(storeVectorBuffer.io.output.bits.reverse.map(_.asUInt))
+  tensorWriteDma.io.data.valid := Mux(useInternalStore, storeVectorBuffer.io.output.valid, io.tensorWriteData.valid)
+  tensorWriteDma.io.data.bits := Mux(useInternalStore, packedStoreVector, io.tensorWriteData.bits)
+  storeVectorBuffer.io.output.ready := useInternalStore && tensorWriteDma.io.data.ready
+  io.tensorWriteData.ready := !useInternalStore && tensorWriteDma.io.data.ready
   io.tensorWriteDone := tensorWriteDma.io.done
   memoryArbiter.io.client2Request <> tensorWriteDma.io.memoryRequest
   memoryArbiter.io.client2Response.ready := true.B
