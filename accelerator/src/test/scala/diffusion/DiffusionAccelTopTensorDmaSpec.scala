@@ -27,6 +27,13 @@ class DiffusionAccelTopTensorDmaSpec extends AnyFlatSpec with ChiselScalatestTes
     dut.io.gn2AffineWrite.valid.poke(false.B)
     dut.io.gn2ActivationCommand.valid.poke(false.B)
     dut.io.gn2Activation.ready.poke(false.B)
+    dut.io.gn2ConvCommand.valid.poke(false.B)
+    dut.io.gn2ConvWeightWrite.valid.poke(false.B)
+    dut.io.gn2ConvInputShift.poke(0.U)
+    dut.io.gn2ConvOutputShift.poke(0.U)
+    dut.io.gn2AddResidual.poke(false.B)
+    dut.io.gn2ConvOutput.ready.poke(false.B)
+    for (lane <- 0 until 32) { dut.io.gn2Temb(lane).poke(0.S); dut.io.gn2Residual(lane).poke(0.S) }
     dut.io.tensorWriteCommand.valid.poke(false.B)
     dut.io.tensorWriteData.valid.poke(false.B)
     dut.io.mig.rdy.poke(false.B)

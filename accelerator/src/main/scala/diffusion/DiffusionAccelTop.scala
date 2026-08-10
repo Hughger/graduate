@@ -39,6 +39,15 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
     val gn2ActivationCommand = Flipped(Decoupled(new TensorVectorReadCommand(12)))
     val gn2Activation = Decoupled(Vec(32, SInt(16.W)))
     val gn2ActivationDone = Output(Bool())
+    val gn2ConvCommand = Flipped(Decoupled(new ConvBatchCommand))
+    val gn2ConvWeightWrite = Flipped(Decoupled(new ConvWeightWrite))
+    val gn2ConvInputShift = Input(UInt(4.W))
+    val gn2ConvOutputShift = Input(UInt(5.W))
+    val gn2Temb = Input(Vec(32, SInt(16.W)))
+    val gn2Residual = Input(Vec(32, SInt(16.W)))
+    val gn2AddResidual = Input(Bool())
+    val gn2ConvOutput = Decoupled(Vec(32, SInt(16.W)))
+    val gn2ConvDone = Output(Bool())
     val tensorBufferOccupancy = Output(UInt(13.W))
     val tensorWriteCommand = Flipped(Decoupled(new TensorWriteCommand))
     val tensorWriteData = Flipped(Decoupled(UInt(512.W)))
@@ -57,6 +66,7 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   val gn1StatsEngine = Module(new GroupNormStatsEngine(32))
   val convToGn2Stats = Module(new ConvToGroupNormStatsPath(DiffusionParams.sd15EightTile, resultDepth))
   val gn2ActivationPath = Module(new GroupNormActivationPath(32))
+  val gn2ConvPath = Module(new Conv2ResidualPath(DiffusionParams.sd15EightTile))
   val tensorWriteDma = Module(new TensorWriteDma)
   control.io.axi <> io.axi
   control.io.busy := scheduler.io.busy
@@ -64,7 +74,8 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   scheduler.io.phaseDone := MuxLookup(scheduler.io.phase, phaseDma.io.phaseDone, Seq(
     BlockPhase.Gn1Stats.U -> gn1StatsEngine.io.done,
     BlockPhase.Gn1Conv1.U -> convToGn2Stats.io.convDone,
-    BlockPhase.Gn2Stats.U -> convToGn2Stats.io.statsDone
+    BlockPhase.Gn2Stats.U -> convToGn2Stats.io.statsDone,
+    BlockPhase.Gn2Conv2Residual.U -> gn2ConvPath.io.done
   ))
   io.phase := scheduler.io.phase
   io.busy := scheduler.io.busy
@@ -134,8 +145,23 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   convToGn2Stats.io.activationCommand.bits := io.gn2ActivationCommand.bits
   io.gn2ActivationCommand.ready := scheduler.io.phase === BlockPhase.Gn2Conv2Residual.U && convToGn2Stats.io.activationCommand.ready
   gn2ActivationPath.io.activation <> convToGn2Stats.io.activationOutput
-  io.gn2Activation <> gn2ActivationPath.io.output
+  io.gn2Activation.valid := gn2ActivationPath.io.output.valid
+  io.gn2Activation.bits := gn2ActivationPath.io.output.bits
+  gn2ConvPath.io.activation.valid := gn2ActivationPath.io.output.valid && io.gn2Activation.ready
+  gn2ConvPath.io.activation.bits := gn2ActivationPath.io.output.bits
+  gn2ActivationPath.io.output.ready := io.gn2Activation.ready && gn2ConvPath.io.activation.ready
   io.gn2ActivationDone := convToGn2Stats.io.activationDone
+  gn2ConvPath.io.command.valid := scheduler.io.phase === BlockPhase.Gn2Conv2Residual.U && io.gn2ConvCommand.valid
+  gn2ConvPath.io.command.bits := io.gn2ConvCommand.bits
+  io.gn2ConvCommand.ready := scheduler.io.phase === BlockPhase.Gn2Conv2Residual.U && gn2ConvPath.io.command.ready
+  gn2ConvPath.io.weightWrite <> io.gn2ConvWeightWrite
+  gn2ConvPath.io.inputShift := io.gn2ConvInputShift
+  gn2ConvPath.io.outputShift := io.gn2ConvOutputShift
+  gn2ConvPath.io.temb := io.gn2Temb
+  gn2ConvPath.io.residual := io.gn2Residual
+  gn2ConvPath.io.addResidual := io.gn2AddResidual
+  io.gn2ConvOutput <> gn2ConvPath.io.output
+  io.gn2ConvDone := gn2ConvPath.io.done
   io.tensorBufferOccupancy := tensorComputeBuffer.io.occupancy
   memoryArbiter.io.client1Request <> tensorReadDma.io.memoryRequest
   tensorReadDma.io.memoryResponse <> memoryArbiter.io.client1Response
