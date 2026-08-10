@@ -21,6 +21,9 @@ class DiffusionAccelTopTensorWriteDmaSpec extends AnyFlatSpec with ChiselScalate
     dut.io.gn1ConvWeightWrite.valid.poke(false.B)
     dut.io.gn1ConvOutput.ready.poke(false.B)
     dut.io.gn1ConvShift.poke(0.U)
+    dut.io.gn1ResultShift.poke(0.U)
+    dut.io.gn2StatsCommand.valid.poke(false.B)
+    dut.io.gn2Stats.ready.poke(false.B)
     dut.io.tensorWriteCommand.valid.poke(false.B)
     dut.io.tensorWriteData.valid.poke(false.B)
     dut.io.mig.rdy.poke(false.B)
@@ -61,6 +64,12 @@ class DiffusionAccelTopTensorWriteDmaSpec extends AnyFlatSpec with ChiselScalate
     dut.io.gn1ConvCommand.valid.poke(true.B)
     dut.clock.step()
     dut.io.gn1ConvCommand.valid.poke(false.B)
+    dut.clock.step()
+
+    dut.io.gn2StatsCommand.bits.vectors.poke(0.U)
+    dut.io.gn2StatsCommand.valid.poke(true.B)
+    dut.clock.step()
+    dut.io.gn2StatsCommand.valid.poke(false.B)
     dut.clock.step()
 
     dut.io.phaseDone.poke(true.B)

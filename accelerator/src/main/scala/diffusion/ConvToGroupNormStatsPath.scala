@@ -11,6 +11,7 @@ class ConvToGroupNormStatsPath(p: DiffusionParams, resultDepth: Int) extends Mod
     val activation = Flipped(Decoupled(Vec(p.ciTile, SInt(16.W))))
     val convShift = Input(UInt(4.W))
     val resultShift = Input(UInt(5.W))
+    val convOutput = Decoupled(Vec(p.coTile, SInt(p.accumWidth.W)))
     val convDone = Output(Bool())
     val occupancy = Output(UInt(log2Ceil(resultDepth + 1).W))
     val statsCommand = Flipped(Decoupled(new GroupNormStatsCommand))
@@ -31,7 +32,11 @@ class ConvToGroupNormStatsPath(p: DiffusionParams, resultDepth: Int) extends Mod
   convInput.io.input <> io.activation
   conv.io.activation <> convInput.io.output
   result.io.shift := io.resultShift
-  result.io.input <> conv.io.output
+  io.convOutput.valid := conv.io.output.valid
+  io.convOutput.bits := conv.io.output.bits
+  result.io.input.valid := conv.io.output.valid && io.convOutput.ready
+  result.io.input.bits := conv.io.output.bits
+  conv.io.output.ready := result.io.input.ready && io.convOutput.ready
   buffer.io.input <> result.io.output
   buffer.io.clear := conv.io.command.fire
   io.convDone := conv.io.done
