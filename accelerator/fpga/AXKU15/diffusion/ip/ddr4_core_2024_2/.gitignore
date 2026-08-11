@@ -1,0 +1,4 @@
+*
+!.gitignore
+!ddr4_core.xci
+!manifest.json

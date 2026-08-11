@@ -25,8 +25,9 @@
 | --- | --- |
 | `accelerator/fpga/AXKU15/diffusion/scripts/upgrade_ddr4_core_2024_2.tcl` | Copy an external official XCI, upgrade only the copied XCI with Vivado 2024.2, generate outputs, and reject a locked result. |
 | `accelerator/fpga/AXKU15/diffusion/scripts/write_ddr4_ip_manifest.py` | Record SHA-256, tool version, target part, source path, and upgraded XCI path as deterministic JSON. |
-| `accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core_2024_2.xci` | Project-owned upgraded IP configuration; copied/rewritten by the upgrade command. |
+| `accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core.xci` | Project-owned upgraded IP configuration; copied/rewritten by the upgrade command. The contained IP module remains `ddr4_core` to preserve the wrapper connection. |
 | `accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/manifest.json` | Auditable provenance for the project-owned XCI. |
+| `accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/.gitignore` | Keep generated IP products out of Git while retaining the XCI and manifest. |
 | `accelerator/fpga/AXKU15/diffusion/scripts/build_axi64_ddr4_selftest.tcl` | Reject locked input IP before reading the self-test wrapper. |
 | `accelerator/fpga/AXKU15/diffusion/docs/AXKU15_AXI64_DDR4_SELFTEST_BUILD.md` | Document copy/upgrade and elaboration-only commands. |
 | `accelerator/fpga/AXKU15/diffusion/docs/OFFICIAL_DDR4_DEMO_ASSESSMENT.md` | State that 2024.2 validation uses a project-owned upgraded copy, not the official demo. |
@@ -36,12 +37,13 @@
 **Files:**
 - Create: `accelerator/fpga/AXKU15/diffusion/scripts/upgrade_ddr4_core_2024_2.tcl`
 - Create: `accelerator/fpga/AXKU15/diffusion/scripts/write_ddr4_ip_manifest.py`
-- Create at runtime, do not stage: `accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core_2024_2.xci`
+- Create at runtime, stage: `accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core.xci`
 - Create at runtime, stage: `accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/manifest.json`
+- Create: `accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/.gitignore`
 
 **Consumes:** an external official `ddr4_core.xci`, target part `xcku15p-ffve1517-2-i`, and the installed Vivado 2024.2 executable.
 
-**Produces:** an unlocked project-owned `ddr4_core_2024_2.xci`, generated output products ignored by Git, and a manifest carrying `source_sha256`, `upgraded_sha256`, `vivado_version`, `part`, `source_xci`, and `upgraded_xci`.
+**Produces:** an unlocked project-owned `ddr4_core.xci` in the `ddr4_core_2024_2` directory, with the compatible IP module name `ddr4_core`; generated output products ignored by Git; and a manifest carrying `source_sha256`, `upgraded_sha256`, `vivado_version`, `part`, `source_xci`, and `upgraded_xci`.
 
 - [ ] **Step 1: Write the failing upgrade precondition check**
 
@@ -53,24 +55,30 @@ Run:
   -tclargs -source-xci DOES_NOT_EXIST -output-dir accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2
 ```
 
-Expected: `ERROR: Missing input file` and a nonzero exit code because the Tcl script does not exist yet.
+Expected: `ERROR: Missing input file` and a nonzero exit code because the script rejects a missing source XCI.
 
 - [ ] **Step 2: Implement the guarded Tcl upgrade command**
 
 Create `upgrade_ddr4_core_2024_2.tcl` with an option parser that accepts exactly `-source-xci` and `-output-dir`, rejects missing files, and performs the following core operations:
 
 ```tcl
-set copied_xci [file join $output_dir ddr4_core_2024_2.xci]
+set copied_xci [file join $output_dir ddr4_core.xci]
 file mkdir $output_dir
 file copy -force $source_xci $copied_xci
+set inherited_output_dir "../../../../ddr_test.gen/sources_1/ip/ddr4_core"
+set xci_contents [read [open $copied_xci r]]
+if {[regexp -all -- $inherited_output_dir $xci_contents] != 2} { error "Expected exactly two inherited DDR4 output directory fields" }
+set handle [open $copied_xci w]
+puts -nonewline $handle [string map [list $inherited_output_dir "."] $xci_contents]
+close $handle
 create_project -in_memory ddr4_core_2024_2 -part xcku15p-ffve1517-2-i
 read_ip $copied_xci
 set core [lindex [get_ips] 0]
-set_property name ddr4_core_2024_2 $core
+
 upgrade_ip $core
 generate_target all $core
 if {[get_property IS_LOCKED $core]} { error "Upgraded IP remains locked" }
-write_ip_tcl -force [file join $output_dir recreate_ddr4_core_2024_2.tcl] $core
+write_ip_tcl -force $core [file join $output_dir recreate_ddr4_core_2024_2.tcl]
 puts "UPGRADED_XCI=[get_property IP_FILE $core]"
 exit
 ```
@@ -129,7 +137,7 @@ Run:
 $python = 'C:\Users\98676\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
 & $python accelerator/fpga/AXKU15/diffusion/scripts/write_ddr4_ip_manifest.py `
   --source-xci $official `
-  --upgraded-xci accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core_2024_2.xci `
+  --upgraded-xci accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core.xci `
   --vivado-version 2024.2 `
   --output accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/manifest.json
 & $python -m json.tool accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/manifest.json
@@ -142,8 +150,9 @@ Expected: valid JSON with two distinct 64-character SHA-256 values and the exact
 ```powershell
 git add accelerator/fpga/AXKU15/diffusion/scripts/upgrade_ddr4_core_2024_2.tcl `
   accelerator/fpga/AXKU15/diffusion/scripts/write_ddr4_ip_manifest.py `
-  accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core_2024_2.xci `
+  accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core.xci `
   accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/manifest.json
+  accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/.gitignore
 git commit -m "feat: add upgraded AXKU15 DDR4 IP copy"
 ```
 
@@ -153,7 +162,7 @@ git commit -m "feat: add upgraded AXKU15 DDR4 IP copy"
 - Modify: `accelerator/fpga/AXKU15/diffusion/scripts/build_axi64_ddr4_selftest.tcl:44-49`
 - Test: `accelerator/fpga/AXKU15/diffusion/scripts/build_axi64_ddr4_selftest.tcl` invoked once with the official XCI and once with the owned XCI
 
-**Consumes:** `ddr4_core_2024_2.xci` from Task 1 and generated `Axi64DdrSelfTest.v`.
+**Consumes:** `ddr4_core.xci` from Task 1 and generated `Axi64DdrSelfTest.v`.
 
 **Produces:** a deterministic error for a locked XCI and an elaboration-only build path for the unlocked owned XCI.
 
@@ -198,7 +207,7 @@ sbt 'runMain FLOOD_Accelerator.diffusion.GenerateAxi64DdrSelfTestVerilog'
 Set-Location ..
 & 'C:\Xilinx\Vivado\2024.2\bin\vivado.bat' -mode batch `
   -source accelerator/fpga/AXKU15/diffusion/scripts/build_axi64_ddr4_selftest.tcl `
-  -tclargs -ddr4-xci accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core_2024_2.xci `
+  -tclargs -ddr4-xci accelerator/fpga/AXKU15/diffusion/ip/ddr4_core_2024_2/ddr4_core.xci `
   -ddr4-xdc $xdc `
   -selftest-rtl accelerator/target/generated/axi64-ddr4-selftest/Axi64DdrSelfTest.v
 ```
