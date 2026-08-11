@@ -86,6 +86,7 @@ final class Axi64MemoryModel(axi: Axi4Master64, delays: Axi64DelayProfile) {
   private var readWords = Vector.empty[BigInt]
   private var readBeat = 0
   private var protocolError: Option[String] = None
+  private val delayed = scala.collection.mutable.Set.empty[String]
 
   private def bit(value: BigInt, index: Int): Boolean = ((value >> index) & 1) == 1
   private def read64(address: BigInt): BigInt = (0 until 8).map { offset => BigInt(bytes(address + offset)) << (8 * offset) }.sum
@@ -108,7 +109,7 @@ final class Axi64MemoryModel(axi: Axi4Master64, delays: Axi64DelayProfile) {
     (0 until 64).map(offset => BigInt(bytes(address + offset)) << (8 * offset)).sum
   }
 
-  def delayedChannels: Set[String] = Set.empty
+  def delayedChannels: Set[String] = delayed.toSet
 
   def driveBeforeClock(): Unit = {
     axi.aw.ready.poke((writeAddress.isEmpty && addressDelay == 0).B)
@@ -123,9 +124,9 @@ final class Axi64MemoryModel(axi: Axi4Master64, delays: Axi64DelayProfile) {
   }
 
   def observeBeforeClock(): Unit = {
-    if (writeAddress.isEmpty && bool(axi.aw.valid) && addressDelay > 0) addressDelay -= 1
-    if (writeAddress.nonEmpty && bool(axi.w.valid) && writeDelay > 0) writeDelay -= 1
-    if (responsePending && responseDelay > 0) responseDelay -= 1
+    if (writeAddress.isEmpty && bool(axi.aw.valid) && addressDelay > 0) { delayed += "AW"; addressDelay -= 1 }
+    if (writeAddress.nonEmpty && bool(axi.w.valid) && writeDelay > 0) { delayed += "W"; writeDelay -= 1 }
+    if (responsePending && responseDelay > 0) { if (bool(axi.b.ready)) delayed += "B"; responseDelay -= 1 }
     if (readWords.isEmpty && bool(axi.ar.valid) && readAddressDelay > 0) readAddressDelay -= 1
     if (readWords.nonEmpty && readDelay > 0) readDelay -= 1
 

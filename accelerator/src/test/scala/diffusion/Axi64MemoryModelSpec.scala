@@ -8,7 +8,7 @@ import org.scalatest.matchers.should.Matchers
 class Axi64MemoryModelSpec extends AnyFlatSpec with ChiselScalatestTester with Matchers {
   "Axi64MemoryModel" should "store one 512-bit bridge write as eight ordered 64-bit beats" in {
     test(new MigAppToAxi64Bridge) { dut =>
-      val memory = new Axi64MemoryModel(dut.io.axi, Axi64DelayProfile.immediate)
+      val memory = new Axi64MemoryModel(dut.io.axi, Axi64DelayProfile.staggered)
       val word = (0 until 8).map(index => BigInt(index + 1) << (64 * index)).sum
 
       dut.io.request.bits.write.poke(true.B)
@@ -37,6 +37,7 @@ class Axi64MemoryModelSpec extends AnyFlatSpec with ChiselScalatestTester with M
       doneSeen shouldBe true
       memory.read512(0x400) shouldBe word
       memory.assertNoProtocolError()
+      memory.delayedChannels shouldBe Set("AW", "W", "B")
     }
   }
   it should "return one 512-bit bridge read as eight ordered 64-bit beats" in {
