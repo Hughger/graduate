@@ -65,6 +65,32 @@ class DiffusionAccelTopResNetBlockE2ESpec extends AnyFlatSpec with ChiselScalate
       }
       completed shouldBe true
       dut.io.phase.expect(BlockPhase.Gn1Stats.U)
+
+      dut.io.gn1StatsCommand.bits.baseAddress.poke(0.U)
+      dut.io.gn1StatsCommand.bits.vectors.poke(1.U)
+      dut.io.gn1StatsCommand.valid.poke(true.B)
+      tick(dut, memory)
+      dut.io.gn1StatsCommand.valid.poke(false.B)
+
+      var statsSeen = false
+      for (_ <- 0 until 256 if !statsSeen) {
+        if (dut.io.gn1Stats.valid.peek().litToBoolean) {
+          dut.io.gn1Stats.bits.sum.expect(0.S)
+          dut.io.gn1Stats.bits.sumSquare.expect(32.U)
+          dut.io.gn1Stats.bits.count.expect(32.U)
+          dut.io.gn1Stats.ready.poke(true.B)
+          statsSeen = true
+        }
+        tick(dut, memory)
+      }
+      statsSeen shouldBe true
+      dut.io.gn1Stats.ready.poke(false.B)
+      var conv1PhaseSeen = false
+      for (_ <- 0 until 16 if !conv1PhaseSeen) {
+        conv1PhaseSeen = dut.io.phase.peek().litValue == BlockPhase.Gn1Conv1
+        tick(dut, memory)
+      }
+      conv1PhaseSeen shouldBe true
       memory.assertNoProtocolError()
     }
   }
