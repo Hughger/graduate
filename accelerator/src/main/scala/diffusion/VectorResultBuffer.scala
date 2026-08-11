@@ -19,29 +19,38 @@ class VectorResultBuffer(depthVectors: Int, lanes: Int, addressWidth: Int = 12) 
     val done = Output(Bool())
   })
 
-  val storage = Reg(Vec(depthVectors, Vec(lanes, SInt(16.W))))
+  // A synchronous RAM keeps the 128 x 32 x INT16 result store out of LUT/FF
+  // fabric. The next vector is requested on the current output handshake, so
+  // an accepted stream remains one vector per cycle after the initial read.
+  val storage = SyncReadMem(depthVectors, Vec(lanes, SInt(16.W)))
   val writeIndex = RegInit(0.U(indexWidth.W))
   val occupancy = RegInit(0.U(countWidth.W))
-  val reading = RegInit(false.B)
+  val outputValid = RegInit(false.B)
   val readIndex = Reg(UInt(indexWidth.W))
   val remaining = Reg(UInt(16.W))
   val doneReg = RegInit(false.B)
 
   io.input.ready := !io.clear && occupancy =/= depthVectors.U
   io.occupancy := occupancy
-  io.command.ready := !reading && !io.clear
-  io.output.valid := reading
-  io.output.bits := storage(readIndex)
+  io.command.ready := !outputValid && !io.clear
+  io.output.valid := outputValid && !io.clear
   io.done := doneReg
   doneReg := false.B
+
+  val nextReadIndex = Mux(readIndex === (depthVectors - 1).U, 0.U, readIndex + 1.U)
+  val issueFirstRead = io.command.fire && io.command.bits.vectors =/= 0.U
+  val issueNextRead = io.output.fire && remaining =/= 1.U
+  val readAddress = Mux(issueFirstRead, io.command.bits.baseAddress(indexWidth - 1, 0), nextReadIndex)
+  val readData = storage.read(readAddress, issueFirstRead || issueNextRead)
+  io.output.bits := readData
 
   when(io.clear) {
     writeIndex := 0.U
     occupancy := 0.U
-    reading := false.B
+    outputValid := false.B
     remaining := 0.U
   }.elsewhen(io.input.fire) {
-    storage(writeIndex) := io.input.bits
+    storage.write(writeIndex, io.input.bits)
     writeIndex := Mux(writeIndex === (depthVectors - 1).U, 0.U, writeIndex + 1.U)
     occupancy := occupancy + 1.U
   }
@@ -52,15 +61,15 @@ class VectorResultBuffer(depthVectors: Int, lanes: Int, addressWidth: Int = 12) 
     when(io.command.bits.vectors === 0.U) {
       doneReg := true.B
     }.otherwise {
-      reading := true.B
+      outputValid := true.B
     }
   }
   when(io.output.fire) {
     when(remaining === 1.U) {
-      reading := false.B
+      outputValid := false.B
       doneReg := true.B
     }.otherwise {
-      readIndex := Mux(readIndex === (depthVectors - 1).U, 0.U, readIndex + 1.U)
+      readIndex := nextReadIndex
       remaining := remaining - 1.U
     }
   }
