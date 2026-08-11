@@ -149,6 +149,78 @@ class DiffusionAccelTopResNetBlockE2ESpec extends AnyFlatSpec with ChiselScalate
         tick(dut, memory)
       }
       conv2PhaseSeen shouldBe true
+
+      for (lane <- 0 until 32) {
+        dut.io.gn2AffineWrite.bits.channel.poke(lane.U)
+        dut.io.gn2AffineWrite.bits.gamma.poke(256.S)
+        dut.io.gn2AffineWrite.bits.beta.poke(0.S)
+        dut.io.gn2AffineWrite.valid.poke(true.B)
+        tick(dut, memory)
+      }
+      dut.io.gn2AffineWrite.valid.poke(false.B)
+      for (lane <- 0 until 32) {
+        dut.io.gn2ConvWeightWrite.bits.row.poke(lane.U)
+        dut.io.gn2ConvWeightWrite.bits.column.poke(lane.U)
+        dut.io.gn2ConvWeightWrite.bits.data.poke(1.S)
+        dut.io.gn2ConvWeightWrite.valid.poke(true.B)
+        dut.io.gn2Temb(lane).poke(3.S)
+        dut.io.gn2Residual(lane).poke((-2).S)
+        tick(dut, memory)
+      }
+      dut.io.gn2ConvWeightWrite.valid.poke(false.B)
+      dut.io.gn2AddResidual.poke(true.B)
+      dut.io.gn2ConvCommand.bits.vectors.poke(1.U)
+      dut.io.gn2ConvCommand.valid.poke(true.B)
+      tick(dut, memory)
+      dut.io.gn2ConvCommand.valid.poke(false.B)
+
+      dut.io.gn2ActivationCommand.bits.baseAddress.poke(0.U)
+      dut.io.gn2ActivationCommand.bits.vectors.poke(1.U)
+      dut.io.gn2ActivationCommand.valid.poke(true.B)
+      tick(dut, memory)
+      dut.io.gn2ActivationCommand.valid.poke(false.B)
+
+      val expectedActivation = Vector.fill(16)(0) ++ Vector.fill(16)(2)
+      val expectedFinal = ResNetBlockE2EReference.finalLanes(input, Vector.fill(32)(3), Vector.fill(32)(-2))
+      var activationSeen = false
+      var conv2OutputSeen = false
+      for (_ <- 0 until 512 if !(activationSeen && conv2OutputSeen)) {
+        if (dut.io.gn2Activation.valid.peek().litToBoolean) {
+          expectedActivation.zipWithIndex.foreach { case (value, lane) => dut.io.gn2Activation.bits(lane).expect(value.S) }
+          dut.io.gn2Activation.ready.poke(true.B)
+          activationSeen = true
+        }
+        if (dut.io.gn2ConvOutput.valid.peek().litToBoolean) {
+          expectedFinal.zipWithIndex.foreach { case (value, lane) => dut.io.gn2ConvOutput.bits(lane).expect(value.S) }
+          dut.io.gn2ConvOutput.ready.poke(true.B)
+          conv2OutputSeen = true
+        }
+        tick(dut, memory)
+      }
+      activationSeen shouldBe true
+      conv2OutputSeen shouldBe true
+      dut.io.gn2Activation.ready.poke(false.B)
+      dut.io.gn2ConvOutput.ready.poke(false.B)
+
+      var storePhaseSeen = false
+      for (_ <- 0 until 16 if !storePhaseSeen) {
+        storePhaseSeen = dut.io.phase.peek().litValue == BlockPhase.StoreOutput
+        tick(dut, memory)
+      }
+      storePhaseSeen shouldBe true
+      dut.io.tensorWriteCommand.bits.address.poke("h800".U)
+      dut.io.tensorWriteCommand.bits.beats.poke(1.U)
+      dut.io.tensorWriteCommand.valid.poke(true.B)
+      tick(dut, memory)
+      dut.io.tensorWriteCommand.valid.poke(false.B)
+
+      var doneSeen = false
+      for (_ <- 0 until 512 if !doneSeen) {
+        doneSeen = dut.io.done.peek().litToBoolean
+        tick(dut, memory)
+      }
+      doneSeen shouldBe true
+      memory.read512(0x800) shouldBe ResNetBlockE2EReference.packLanes(expectedFinal)
       memory.assertNoProtocolError()
     }
   }
