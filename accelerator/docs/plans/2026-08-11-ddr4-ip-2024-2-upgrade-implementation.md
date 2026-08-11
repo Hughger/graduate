@@ -266,6 +266,20 @@ git commit -m "docs: document upgraded DDR4 IP validation"
 git push origin sd15-resnetblock
 ```
 
+## Executed non-project flow note
+
+Vivado 2024.2 preserved the official XCI's old generated-output path when the
+file was copied. The upgrade command therefore rewrites its two output-directory
+fields to the local IP directory and runs `synth_ip` after `generate_target all`
+to create the required OOC DCP.
+
+Reading the upgraded XCI with `read_ip` inside the self-test non-project flow
+repeatedly stalled after `synth_design -rtl` began. The verified replacement
+requires the co-located project-owned `manifest.json`, `ddr4_core.dcp`, and
+`par/ddr4_core.xdc`; it sets the AXKU15 part, attaches the DCP explicitly at
+`u_ddr4_core/inst`, and reads the generated IP XDC after the board XDC. This
+completed RTL elaboration with zero critical warnings and zero errors. The
+original demo lacks these owned artifacts and is rejected before elaboration.
 ## Plan self-review
 
 - Spec coverage: Task 1 implements the owned copy and provenance; Task 2 prevents accidental use of locked IP; Task 3 documents the workflow and runs RTL/Vivado regression. The official demo preservation, 64-bit configuration, and no-bitstream boundary are global constraints and are checked by each task.

@@ -61,6 +61,7 @@ if {[get_property IS_LOCKED $ddr4_ip]} {
   error "Upgraded IP remains locked: $copied_xci"
 }
 generate_target all $ddr4_ip
+synth_ip $ddr4_ip
 write_ip_tcl -force $ddr4_ip [file join $output_dir recreate_ddr4_core_2024_2.tcl]
 puts "UPGRADED_XCI=$copied_xci"
 puts "UPGRADED_IP=$ddr4_ip"
