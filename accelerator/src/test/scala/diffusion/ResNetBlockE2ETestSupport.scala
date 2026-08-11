@@ -127,8 +127,8 @@ final class Axi64MemoryModel(axi: Axi4Master64, delays: Axi64DelayProfile) {
     if (writeAddress.isEmpty && bool(axi.aw.valid) && addressDelay > 0) { delayed += "AW"; addressDelay -= 1 }
     if (writeAddress.nonEmpty && bool(axi.w.valid) && writeDelay > 0) { delayed += "W"; writeDelay -= 1 }
     if (responsePending && responseDelay > 0) { if (bool(axi.b.ready)) delayed += "B"; responseDelay -= 1 }
-    if (readWords.isEmpty && bool(axi.ar.valid) && readAddressDelay > 0) readAddressDelay -= 1
-    if (readWords.nonEmpty && readDelay > 0) readDelay -= 1
+    if (readWords.isEmpty && bool(axi.ar.valid) && readAddressDelay > 0) { delayed += "AR"; readAddressDelay -= 1 }
+    if (readWords.nonEmpty && readDelay > 0) { if (bool(axi.r.ready)) delayed += "R"; readDelay -= 1 }
 
     if (bool(axi.aw.valid) && bool(axi.aw.ready)) {
       if (lit(axi.aw.bits.id) != 0 || lit(axi.aw.bits.len) != 7 || lit(axi.aw.bits.size) != 3) fail("invalid AXI write address burst")

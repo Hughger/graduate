@@ -42,7 +42,7 @@ class Axi64MemoryModelSpec extends AnyFlatSpec with ChiselScalatestTester with M
   }
   it should "return one 512-bit bridge read as eight ordered 64-bit beats" in {
     test(new MigAppToAxi64Bridge) { dut =>
-      val memory = new Axi64MemoryModel(dut.io.axi, Axi64DelayProfile.immediate)
+      val memory = new Axi64MemoryModel(dut.io.axi, Axi64DelayProfile.staggered)
       val word = (0 until 8).map(index => BigInt(index + 0x11) << (64 * index)).sum
       memory.load512(0x480, word)
 
@@ -73,6 +73,7 @@ class Axi64MemoryModelSpec extends AnyFlatSpec with ChiselScalatestTester with M
       accepted shouldBe true
       received shouldBe Some(word)
       memory.assertNoProtocolError()
+      memory.delayedChannels shouldBe Set("AR", "R")
     }
   }
 }
