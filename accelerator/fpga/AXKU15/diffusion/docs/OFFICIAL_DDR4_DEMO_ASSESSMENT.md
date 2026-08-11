@@ -70,3 +70,11 @@ Its focused bridge/transfer/arbiter simulation passed 10/10 tests on 2026-08-11,
 and real `DiffusionAccelTop` Verilog generation still completes.  The bridge is
 not yet connected to the vendor project, so this does not alter the 64/80-bit
 or memory-part validation gate above.
+## AXI64 selectable-top status
+
+The accelerator now has a generated AXI64-top variant that selects the tested
+512-to-64 bridge internally while retaining the existing MIG-top as its
+default.  Focused default-MIG, AXI64-top, and bridge simulation passed 10/10
+cases on 2026-08-11, and both generated-top commands completed.  It is ready
+for a future wrapper-level connection to the official core's AXI slave, but no
+vendor project has been changed and no calibration/data test has been run.

@@ -87,3 +87,16 @@ alternate top passes its simulation and generation tests.
    `axi64_ar`, and `axi64_r` signals.
 5. No test, source file, XCI, or constraint is written under the user-provided
    official demo directory.
+
+## Verification record
+
+On 2026-08-11, `DiffusionAccelTopAxi64Spec` verified that the default top still
+uses MIG with AXI64 idle and that the AXI64 variant keeps MIG commands inactive
+while reassembling an eight-beat read into the existing memory response.  The
+selected default-top, AXI64-top, and bridge test scope passed 10/10 cases.
+
+Both `GenerateDiffusionAccelTopVerilog` and
+`GenerateDiffusionAccelAxi64TopVerilog` completed successfully.  The latter
+emits all five AXI64 channel groups (`axi64_aw`, `axi64_w`, `axi64_b`,
+`axi64_ar`, and `axi64_r`).  No vendor source, XCI, constraint, physical pin,
+or board-calibration claim is included in this result.

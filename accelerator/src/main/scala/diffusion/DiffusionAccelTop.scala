@@ -3,7 +3,16 @@ package FLOOD_Accelerator.diffusion
 import chisel3._
 import chisel3.util._
 
-class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
+sealed trait DiffusionMemoryBackend
+object DiffusionMemoryBackend {
+  case object MigApp extends DiffusionMemoryBackend
+  case object Axi64 extends DiffusionMemoryBackend
+}
+
+class DiffusionAccelTop(
+    resultDepth: Int = 128,
+    memoryBackend: DiffusionMemoryBackend = DiffusionMemoryBackend.MigApp
+) extends Module {
   val io = IO(new Bundle {
     val axi = new AxiLitePort
     // Completes compute-only scheduler phases; load/store are driven by DMA.
@@ -56,13 +65,15 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
     val tensorWriteDone = Output(Bool())
     // A board wrapper connects this seam to c0_ddr4_app_*.
     val mig = new MigAppPort
+    // The AXKU15 vendor DDR4 demo exposes a 64-bit AXI4 slave.
+    val axi64 = new Axi4Master64
   })
   val control = Module(new AxiLiteControl)
   val scheduler = Module(new BlockScheduler)
   val perfMonitor = Module(new PerfMonitor)
   val phaseDma = Module(new DmaPhaseController)
-  val memoryTransfer = Module(new MigAppTransfer)
   val memoryArbiter = Module(new MigAppRequestArbiter)
+  val memoryStall = WireDefault(false.B)
   val tensorReadDma = Module(new TensorReadDma)
   val tensorComputeBuffer = Module(new TensorComputeBuffer(4096))
   val vectorReaderArbiter = Module(new TensorVectorReaderThreeWayArbiter(12, 32))
@@ -207,28 +218,60 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   memoryArbiter.io.client2Response.ready := true.B
   tensorWriteDma.io.memoryDone := memoryArbiter.io.client2Done
 
-  memoryTransfer.io.request <> memoryArbiter.io.memoryRequest
-  memoryArbiter.io.memoryResponse <> memoryTransfer.io.response
-  memoryArbiter.io.memoryDone := memoryTransfer.io.done
+  if (memoryBackend == DiffusionMemoryBackend.MigApp) {
+    val memoryTransfer = Module(new MigAppTransfer)
+    memoryTransfer.io.request <> memoryArbiter.io.memoryRequest
+    memoryArbiter.io.memoryResponse <> memoryTransfer.io.response
+    memoryArbiter.io.memoryDone := memoryTransfer.io.done
 
-  io.mig.en := memoryTransfer.io.app.en
-  io.mig.cmd := memoryTransfer.io.app.cmd
-  io.mig.address := memoryTransfer.io.app.address
-  io.mig.wdfWren := memoryTransfer.io.app.wdfWren
-  io.mig.wdfEnd := memoryTransfer.io.app.wdfEnd
-  io.mig.wdfData := memoryTransfer.io.app.wdfData
-  io.mig.wdfMask := memoryTransfer.io.app.wdfMask
-  memoryTransfer.io.app.rdy := io.mig.rdy
-  memoryTransfer.io.app.wdfRdy := io.mig.wdfRdy
-  memoryTransfer.io.app.rdData := io.mig.rdData
-  memoryTransfer.io.app.rdDataValid := io.mig.rdDataValid
-  memoryTransfer.io.app.rdDataEnd := io.mig.rdDataEnd
+    io.mig.en := memoryTransfer.io.app.en
+    io.mig.cmd := memoryTransfer.io.app.cmd
+    io.mig.address := memoryTransfer.io.app.address
+    io.mig.wdfWren := memoryTransfer.io.app.wdfWren
+    io.mig.wdfEnd := memoryTransfer.io.app.wdfEnd
+    io.mig.wdfData := memoryTransfer.io.app.wdfData
+    io.mig.wdfMask := memoryTransfer.io.app.wdfMask
+    memoryTransfer.io.app.rdy := io.mig.rdy
+    memoryTransfer.io.app.wdfRdy := io.mig.wdfRdy
+    memoryTransfer.io.app.rdData := io.mig.rdData
+    memoryTransfer.io.app.rdDataValid := io.mig.rdDataValid
+    memoryTransfer.io.app.rdDataEnd := io.mig.rdDataEnd
+
+    io.axi64.aw.valid := false.B
+    io.axi64.aw.bits := 0.U.asTypeOf(new AxiWriteAddress)
+    io.axi64.w.valid := false.B
+    io.axi64.w.bits := 0.U.asTypeOf(new AxiWriteData)
+    io.axi64.b.ready := false.B
+    io.axi64.ar.valid := false.B
+    io.axi64.ar.bits := 0.U.asTypeOf(new AxiReadAddress)
+    io.axi64.r.ready := false.B
+    memoryStall := (memoryTransfer.io.app.en && !io.mig.rdy) ||
+      (memoryTransfer.io.app.wdfWren && !io.mig.wdfRdy)
+  } else {
+    val axiBridge = Module(new MigAppToAxi64Bridge)
+    axiBridge.io.request <> memoryArbiter.io.memoryRequest
+    memoryArbiter.io.memoryResponse <> axiBridge.io.response
+    memoryArbiter.io.memoryDone := axiBridge.io.done
+    io.axi64 <> axiBridge.io.axi
+
+    io.mig.en := false.B
+    io.mig.cmd := 0.U
+    io.mig.address := 0.U
+    io.mig.wdfWren := false.B
+    io.mig.wdfEnd := false.B
+    io.mig.wdfData := 0.U
+    io.mig.wdfMask := 0.U
+    memoryStall := (io.axi64.aw.valid && !io.axi64.aw.ready) ||
+      (io.axi64.w.valid && !io.axi64.w.ready) ||
+      (io.axi64.ar.valid && !io.axi64.ar.ready) ||
+      (io.axi64.b.ready && !io.axi64.b.valid) ||
+      (io.axi64.r.ready && !io.axi64.r.valid)
+  }
 
   // Count only externally induced stalls. Multiple blocked interfaces in the
   // same cycle form one backpressure event so the counter remains in cycles.
   val externalBackpressure =
-    (memoryTransfer.io.app.en && !io.mig.rdy) ||
-    (memoryTransfer.io.app.wdfWren && !io.mig.wdfRdy) ||
+    memoryStall ||
     (io.gn1Stats.valid && !io.gn1Stats.ready) ||
     (io.gn1ConvOutput.valid && !io.gn1ConvOutput.ready) ||
     (io.gn2Stats.valid && !io.gn2Stats.ready) ||
