@@ -90,7 +90,7 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   perfMonitor.io.writeBytes := Mux(tensorWriteDma.io.data.fire, 64.U(64.W), 0.U(64.W))
   perfMonitor.io.macActive := scheduler.io.phase === BlockPhase.Gn1Conv1.U || scheduler.io.phase === BlockPhase.Gn2Conv2Residual.U
   perfMonitor.io.groupNormActive := scheduler.io.phase === BlockPhase.Gn1Stats.U || scheduler.io.phase === BlockPhase.Gn2Stats.U
-  perfMonitor.io.stalled := false.B
+
   perfMonitor.io.snapshot := io.perfSnapshot || control.io.perfSnapshot
   io.perfCounters := perfMonitor.io.counters
 
@@ -223,4 +223,16 @@ class DiffusionAccelTop(resultDepth: Int = 128) extends Module {
   memoryTransfer.io.app.rdData := io.mig.rdData
   memoryTransfer.io.app.rdDataValid := io.mig.rdDataValid
   memoryTransfer.io.app.rdDataEnd := io.mig.rdDataEnd
+
+  // Count only externally induced stalls. Multiple blocked interfaces in the
+  // same cycle form one backpressure event so the counter remains in cycles.
+  val externalBackpressure =
+    (memoryTransfer.io.app.en && !io.mig.rdy) ||
+    (memoryTransfer.io.app.wdfWren && !io.mig.wdfRdy) ||
+    (io.gn1Stats.valid && !io.gn1Stats.ready) ||
+    (io.gn1ConvOutput.valid && !io.gn1ConvOutput.ready) ||
+    (io.gn2Stats.valid && !io.gn2Stats.ready) ||
+    (io.gn2Activation.valid && !io.gn2Activation.ready) ||
+    (io.gn2ConvOutput.valid && !io.gn2ConvOutput.ready)
+  perfMonitor.io.stalled := scheduler.io.busy && externalBackpressure
 }

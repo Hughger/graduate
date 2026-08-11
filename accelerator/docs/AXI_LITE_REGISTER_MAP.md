@@ -29,7 +29,7 @@ captured sample.
 | `0x020` / `0x024` | `writeBytes` | bytes | 64 bytes for every accepted TensorWrite DMA beat. |
 | `0x028` / `0x02c` | `macCycles` | cycles | Scheduler cycles in `Gn1Conv1` or `Gn2Conv2Residual`. |
 | `0x030` / `0x034` | `groupNormCycles` | cycles | Scheduler cycles in `Gn1Stats` or `Gn2Stats`. |
-| `0x038` / `0x03c` | `stallCycles` | cycles | Reserved for a future dataflow-stall detector; currently always zero. |
+| `0x038` / `0x03c` | `stallCycles` | cycles | Busy cycles with MIG or mandatory top-level result-stream backpressure (`valid && !ready`). Multiple blocked interfaces still count as one cycle. |
 
 ## Recommended host sequence
 
