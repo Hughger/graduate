@@ -1,5 +1,8 @@
 package FLOOD_Accelerator.diffusion
 
+import chisel3._
+import chiseltest._
+
 final case class GroupStatsReference(sum: BigInt, sumSquare: BigInt, count: BigInt)
 
 object ResNetBlockE2EReference {
@@ -59,4 +62,97 @@ object ResNetBlockE2EReference {
       saturateInt16(BigInt(activation) + temb(index) + residual(index))
     }
   }
+}
+
+final case class Axi64DelayProfile(aw: Int, w: Int, b: Int, ar: Int, r: Int) {
+  require(Seq(aw, w, b, ar, r).forall(_ >= 0), "AXI64 delays must be nonnegative")
+}
+
+object Axi64DelayProfile {
+  val immediate: Axi64DelayProfile = Axi64DelayProfile(0, 0, 0, 0, 0)
+  val staggered: Axi64DelayProfile = Axi64DelayProfile(1, 2, 1, 3, 2)
+}
+
+final class Axi64MemoryModel(axi: Axi4Master64, delays: Axi64DelayProfile) {
+  private val bytes = scala.collection.mutable.Map.empty[BigInt, Int].withDefaultValue(0)
+  private var writeAddress: Option[BigInt] = None
+  private var writeBeat = 0
+  private var writeDelay = 0
+  private var addressDelay = delays.aw
+  private var responseDelay = 0
+  private var responsePending = false
+  private var readAddressDelay = delays.ar
+  private var readDelay = 0
+  private var readWords = Vector.empty[BigInt]
+  private var readBeat = 0
+  private var protocolError: Option[String] = None
+
+  private def bit(value: BigInt, index: Int): Boolean = ((value >> index) & 1) == 1
+  private def read64(address: BigInt): BigInt = (0 until 8).map { offset => BigInt(bytes(address + offset)) << (8 * offset) }.sum
+  private def write64(address: BigInt, data: BigInt, strobe: BigInt): Unit = {
+    for (offset <- 0 until 8 if bit(strobe, offset)) {
+      bytes.update(address + offset, ((data >> (8 * offset)) & 0xff).toInt)
+    }
+  }
+  private def fail(message: String): Unit = if (protocolError.isEmpty) protocolError = Some(message)
+  private def lit(value: chisel3.Data): BigInt = value.peek().litValue
+  private def bool(value: chisel3.Bool): Boolean = value.peek().litToBoolean
+
+  def load512(address: BigInt, word: BigInt): Unit = {
+    require(address % 64 == 0, "512-bit address must be 64-byte aligned")
+    for (offset <- 0 until 64) bytes.update(address + offset, ((word >> (8 * offset)) & 0xff).toInt)
+  }
+
+  def read512(address: BigInt): BigInt = {
+    require(address % 64 == 0, "512-bit address must be 64-byte aligned")
+    (0 until 64).map(offset => BigInt(bytes(address + offset)) << (8 * offset)).sum
+  }
+
+  def delayedChannels: Set[String] = Set.empty
+
+  def driveBeforeClock(): Unit = {
+    axi.aw.ready.poke((writeAddress.isEmpty && addressDelay == 0).B)
+    axi.w.ready.poke((writeAddress.nonEmpty && writeDelay == 0).B)
+    axi.b.valid.poke((responsePending && responseDelay == 0).B)
+    axi.b.bits.id.poke(0.U); axi.b.bits.resp.poke(0.U)
+    axi.ar.ready.poke((readWords.isEmpty && readAddressDelay == 0).B)
+    axi.r.valid.poke((readWords.nonEmpty && readDelay == 0).B)
+    axi.r.bits.data.poke(readWords.lift(readBeat).getOrElse(BigInt(0)).U)
+    axi.r.bits.id.poke(0.U); axi.r.bits.resp.poke(0.U)
+    axi.r.bits.last.poke((readWords.nonEmpty && readBeat == 7).B)
+  }
+
+  def observeBeforeClock(): Unit = {
+    if (writeAddress.isEmpty && bool(axi.aw.valid) && addressDelay > 0) addressDelay -= 1
+    if (writeAddress.nonEmpty && bool(axi.w.valid) && writeDelay > 0) writeDelay -= 1
+    if (responsePending && responseDelay > 0) responseDelay -= 1
+    if (readWords.isEmpty && bool(axi.ar.valid) && readAddressDelay > 0) readAddressDelay -= 1
+    if (readWords.nonEmpty && readDelay > 0) readDelay -= 1
+
+    if (bool(axi.aw.valid) && bool(axi.aw.ready)) {
+      if (lit(axi.aw.bits.id) != 0 || lit(axi.aw.bits.len) != 7 || lit(axi.aw.bits.size) != 3) fail("invalid AXI write address burst")
+      writeAddress = Some(lit(axi.aw.bits.addr)); writeBeat = 0; writeDelay = delays.w
+    }
+    if (bool(axi.w.valid) && bool(axi.w.ready)) {
+      val base = writeAddress.getOrElse { fail("write data without address"); BigInt(0) }
+      if (bool(axi.w.bits.last) != (writeBeat == 7)) fail("invalid AXI write last")
+      write64(base + 8 * writeBeat, lit(axi.w.bits.data), lit(axi.w.bits.strb))
+      if (writeBeat == 7) { writeAddress = None; responsePending = true; responseDelay = delays.b; addressDelay = delays.aw }
+      else { writeBeat += 1; writeDelay = delays.w }
+    }
+    if (bool(axi.b.valid) && bool(axi.b.ready)) responsePending = false
+
+    if (bool(axi.ar.valid) && bool(axi.ar.ready)) {
+      if (lit(axi.ar.bits.id) != 0 || lit(axi.ar.bits.len) != 7 || lit(axi.ar.bits.size) != 3) fail("invalid AXI read address burst")
+      val base = lit(axi.ar.bits.addr)
+      readWords = Vector.tabulate(8)(beat => read64(base + 8 * beat)); readBeat = 0; readDelay = delays.r; readAddressDelay = delays.ar
+    }
+    if (bool(axi.r.valid) && bool(axi.r.ready)) {
+      if (bool(axi.r.bits.last) != (readBeat == 7)) fail("invalid AXI read last")
+      if (readBeat == 7) { readWords = Vector.empty; readBeat = 0 }
+      else { readBeat += 1; readDelay = delays.r }
+    }
+  }
+
+  def assertNoProtocolError(): Unit = protocolError.foreach(message => throw new AssertionError(message))
 }
