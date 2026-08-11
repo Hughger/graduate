@@ -82,3 +82,16 @@ The implementation is test-first and must demonstrate each of the following:
 - On-board calibration and read/write validation, which are required before
   treating the 64-bit demo configuration as usable hardware.
 - Multiple outstanding transactions and bandwidth optimization.
+
+## Verification record
+
+The standalone bridge was verified in simulation on 2026-08-11 with six
+`MigAppToAxi64BridgeSpec` cases: write split/masking, independent write-channel
+backpressure, AXI write error, eight-beat read reassembly with a retained
+response, AXI read error, and read-error draining through RLAST.  The combined
+bridge, `MigAppTransfer`, and `MigAppRequestArbiter` scope passed 10/10 tests.  The real
+`GenerateDiffusionAccelTopVerilog` generator also completed successfully.
+
+This evidence covers the Chisel bridge only.  It does not modify the vendor
+XCI, establish a board clock/reset wrapper, or prove DDR4 calibration or data
+integrity on AXKU15 hardware.

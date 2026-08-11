@@ -61,3 +61,12 @@ integration path is therefore:
 
 The bridge is feasible RTL work.  The physical 64/80-bit and memory-part
 differences remain board-validation gates, not assumptions to hide in code.
+
+## Bridge verification status
+
+A standalone Chisel `MigAppToAxi64Bridge` now converts one accelerator 512-bit
+request into an eight-beat 64-bit AXI4 burst and repacks eight AXI read beats.
+Its focused bridge/transfer/arbiter simulation passed 10/10 tests on 2026-08-11,
+and real `DiffusionAccelTop` Verilog generation still completes.  The bridge is
+not yet connected to the vendor project, so this does not alter the 64/80-bit
+or memory-part validation gate above.
