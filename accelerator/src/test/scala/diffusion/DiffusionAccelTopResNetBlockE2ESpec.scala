@@ -91,6 +91,64 @@ class DiffusionAccelTopResNetBlockE2ESpec extends AnyFlatSpec with ChiselScalate
         tick(dut, memory)
       }
       conv1PhaseSeen shouldBe true
+
+      for (lane <- 0 until 32) {
+        dut.io.gn1ConvWeightWrite.bits.row.poke(lane.U)
+        dut.io.gn1ConvWeightWrite.bits.column.poke(lane.U)
+        dut.io.gn1ConvWeightWrite.bits.data.poke(1.S)
+        dut.io.gn1ConvWeightWrite.valid.poke(true.B)
+        tick(dut, memory)
+      }
+      dut.io.gn1ConvWeightWrite.valid.poke(false.B)
+      dut.io.gn1ConvCommand.bits.baseAddress.poke(0.U)
+      dut.io.gn1ConvCommand.bits.vectors.poke(1.U)
+      dut.io.gn1ConvCommand.valid.poke(true.B)
+      tick(dut, memory)
+      dut.io.gn1ConvCommand.valid.poke(false.B)
+
+      var conv1OutputSeen = false
+      for (_ <- 0 until 256 if !conv1OutputSeen) {
+        if (dut.io.gn1ConvOutput.valid.peek().litToBoolean) {
+          input.zipWithIndex.foreach { case (value, lane) => dut.io.gn1ConvOutput.bits(lane).expect(value.S) }
+          dut.io.gn1ConvOutput.ready.poke(true.B)
+          conv1OutputSeen = true
+        }
+        tick(dut, memory)
+      }
+      conv1OutputSeen shouldBe true
+      dut.io.gn1ConvOutput.ready.poke(false.B)
+
+      var gn2StatsPhaseSeen = false
+      for (_ <- 0 until 16 if !gn2StatsPhaseSeen) {
+        gn2StatsPhaseSeen = dut.io.phase.peek().litValue == BlockPhase.Gn2Stats
+        tick(dut, memory)
+      }
+      gn2StatsPhaseSeen shouldBe true
+      dut.io.gn2StatsCommand.bits.vectors.poke(1.U)
+      dut.io.gn2StatsCommand.valid.poke(true.B)
+      tick(dut, memory)
+      dut.io.gn2StatsCommand.valid.poke(false.B)
+
+      var gn2StatsSeen = false
+      for (_ <- 0 until 256 if !gn2StatsSeen) {
+        if (dut.io.gn2Stats.valid.peek().litToBoolean) {
+          dut.io.gn2Stats.bits.sum.expect(0.S)
+          dut.io.gn2Stats.bits.sumSquare.expect(32.U)
+          dut.io.gn2Stats.bits.count.expect(32.U)
+          dut.io.gn2Stats.ready.poke(true.B)
+          gn2StatsSeen = true
+        }
+        tick(dut, memory)
+      }
+      gn2StatsSeen shouldBe true
+      dut.io.gn2Stats.ready.poke(false.B)
+
+      var conv2PhaseSeen = false
+      for (_ <- 0 until 16 if !conv2PhaseSeen) {
+        conv2PhaseSeen = dut.io.phase.peek().litValue == BlockPhase.Gn2Conv2Residual
+        tick(dut, memory)
+      }
+      conv2PhaseSeen shouldBe true
       memory.assertNoProtocolError()
     }
   }
