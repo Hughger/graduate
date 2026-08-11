@@ -1,17 +1,19 @@
 # AXKU15 AXI64 DDR4 Transparent Accelerator Top Design
 
 **Date:** 2026-08-11  
-**Status:** Approved design; implementation has not started
+**Status:** Approved design; implementation deferred pending accelerator verification
 
 ## Goal
 
-Create a project-owned AXKU15 top-level integration that connects the
+Define a project-owned AXKU15 top-level integration that will connect the
 `DiffusionAccelTop` AXI64 memory backend to the already validated, project-owned
 copy of the official DDR4 controller IP.  This milestone proves that the
 accelerator's 64-bit AXI4 memory boundary can be elaborated with the board DDR4
-controller without modifying the official demo or its source IP.
+controller without modifying the official demo or its source IP.  The user has
+chosen to defer this integration until the accelerator design and verification
+work is complete.
 
-## Scope
+## Deferred implementation scope
 
 The integration adds:
 
@@ -49,7 +51,7 @@ The board-facing DDR4 clock, reset, pin signals, and board XDC remain those of
 the official AXKU15 DDR4 demo.  The integration uses the repository-owned
 upgraded controller copy and its matching DCP/XDC artifacts.
 
-## Validation
+## Deferred validation
 
 The implementation must:
 
@@ -73,7 +75,13 @@ project baseline.  The separately observed 64/80-bit board-document mismatch
 is deferred to hardware-validation and thesis-limitations work; acceptance of
 this baseline is not evidence that 80-bit hardware operation has been proven.
 
-## Follow-on work
+## Prerequisite and follow-on work
+
+Before implementation of this wrapper, the project will complete functional
+design and simulation-based verification of one SD1.5 ResNetBlock, including
+its scheduler, convolution, GroupNorm, residual path, DMA, and AXI64
+behavioural-memory interactions.  The resulting verification evidence becomes
+the prerequisite for restoring this board-integration milestone.
 
 Host control, SD1.5 workload submission, and implementation/timing/bitstream
 work are separate follow-on milestones.  Keeping them separate preserves this
