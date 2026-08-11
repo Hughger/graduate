@@ -49,3 +49,17 @@ and DDR4 topology are reconciled.
 4. A checked-in manifest makes the source, version, configuration, and hashes
    of the copied IP explicit.
 5. No bitstream is written and no board is programmed.
+## Execution update
+
+The project-owned copy was upgraded by Vivado 2024.2 from DDR4 IP revision 17
+to revision 24. Its local OOC DCP was generated with `synth_ip`; the generated
+files are ignored while the XCI and manifest remain versioned. The official
+demo directory was not modified.
+
+Vivado 2024.2 stalled when the non-project self-test flow used `read_ip` to
+automatically attach the upgraded DCP. The accepted elaboration-only path now
+requires the co-located manifest, DCP, and generated IP XDC, explicitly
+attaches the DCP to `u_ddr4_core/inst`, and reads the IP XDC after the board
+XDC. It has completed RTL elaboration with zero critical warnings and zero
+errors. This does not authorize implementation, bitstream generation, or board
+programming, and it does not resolve the physical 64/80-bit mismatch.

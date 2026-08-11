@@ -87,3 +87,18 @@ errors, without requesting implementation or a bitstream.  It still reports
 that the 2022.2 IP is locked and that the XDC references DQ64--79/DQS8--9 not
 exported by the 64-bit core.  This is composition evidence only, not hardware
 closure.
+## Vivado 2024.2 project-owned copy status
+
+On 2026-08-11 the project copied, rather than modified, the official 2022.2
+`ddr4_core.xci`. Vivado 2024.2 upgraded the copy from DDR4 IP revision 17 to
+24 and generated a project-local OOC `ddr4_core.dcp`; the official demo source
+hash is recorded in the copy's `manifest.json`.
+
+For non-project self-test elaboration, Vivado 2024.2 repeatedly stalled when
+`read_ip` automatically associated that generated DCP. The verified harness
+therefore requires the owned XCI, manifest, DCP, and generated IP XDC together;
+it attaches the DCP at `u_ddr4_core/inst` and reads the IP XDC explicitly. On
+2026-08-11 this completed RTL elaboration with 0 critical warnings and 0
+errors, without implementation or a bitstream. This is tool-flow composition
+evidence only. The physical 64/80-bit, DRAM-part, calibration, and board
+readback gates remain unresolved.
