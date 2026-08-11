@@ -38,7 +38,7 @@ DDR4 reference clock is `AR32/AT32`; it is emitted as `ddr4_ref_clk_p/n` and is 
 
 ## Verified implementation evidence
 
-The bring-up flow was run with Vivado 2024.2 on this repository revision. It completed synthesis, implementation and bitstream generation for `xcku15p-ffve1517-2-i` with zero DRC errors. At a 200 MHz constraint, the post-route setup WNS was **4.220 ns** (TNS 0.000 ns); the generated bitstream was 36,343,241 bytes. These numbers apply only to the small clock/LED smoke top, not to the future DDR4/MIG accelerator implementation. See [DDR4 MIG compatibility](docs/ddr4_mig_compatibility.md) before using the 64-bit candidate constraints; an 80-bit AXKU15 MIG remains unclosed.
+The bring-up flow was run with Vivado 2024.2 on this repository revision. It completed synthesis, implementation and bitstream generation for `xcku15p-ffve1517-2-i` with zero DRC errors. At a 200 MHz constraint, the post-route setup WNS was **4.220 ns** (TNS 0.000 ns); the generated bitstream was 36,343,241 bytes. These numbers apply only to the small clock/LED smoke top, not to the future DDR4/MIG accelerator implementation. See [DDR4 MIG compatibility](docs/ddr4_mig_compatibility.md) before using the 64-bit candidate constraints; an 80-bit AXKU15 MIG remains unclosed. See also [the official DDR4 demo assessment](docs/OFFICIAL_DDR4_DEMO_ASSESSMENT.md): its vendor bitstream is a useful 64-bit baseline, not proof of 80-bit closure.
 ## Actual accelerator RTL validation
 
 `GenerateDiffusionAccelTopVerilog` emits the real `DiffusionAccelTop` rather
