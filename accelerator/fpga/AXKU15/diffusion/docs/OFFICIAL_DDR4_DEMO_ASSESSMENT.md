@@ -78,3 +78,12 @@ default.  Focused default-MIG, AXI64-top, and bridge simulation passed 10/10
 cases on 2026-08-11, and both generated-top commands completed.  It is ready
 for a future wrapper-level connection to the official core's AXI slave, but no
 vendor project has been changed and no calibration/data test has been run.
+## Self-test wrapper elaboration status
+
+The vendor-neutral self-test wrapper and generated `Axi64DdrSelfTest` RTL were
+combined with the supplied official XCI/XDC in a Vivado 2024.2 RTL elaboration
+on 2026-08-11.  The run exited successfully with 0 critical warnings and 0
+errors, without requesting implementation or a bitstream.  It still reports
+that the 2022.2 IP is locked and that the XDC references DQ64--79/DQS8--9 not
+exported by the 64-bit core.  This is composition evidence only, not hardware
+closure.
