@@ -39,7 +39,7 @@ class DiffusionAccelTopResNetBlockE2ESpec extends AnyFlatSpec with ChiselScalate
 
   "DiffusionAccelTop AXI64 ResNetBlock" should "load one tensor beat from behavioral memory before Gn1Stats" in {
     test(new DiffusionAccelTop(memoryBackend = DiffusionMemoryBackend.Axi64)) { dut =>
-      val memory = new Axi64MemoryModel(dut.io.axi64, Axi64DelayProfile.immediate)
+      val memory = new Axi64MemoryModel(dut.io.axi64, Axi64DelayProfile.staggered)
       val input = Vector.fill(16)(-1) ++ Vector.fill(16)(1)
       idle(dut)
       memory.load512(0x400, ResNetBlockE2EReference.packLanes(input))
@@ -222,6 +222,7 @@ class DiffusionAccelTopResNetBlockE2ESpec extends AnyFlatSpec with ChiselScalate
       doneSeen shouldBe true
       memory.read512(0x800) shouldBe ResNetBlockE2EReference.packLanes(expectedFinal)
       memory.assertNoProtocolError()
+      memory.delayedChannels shouldBe Set("AW", "W", "B", "AR", "R")
     }
   }
 }
