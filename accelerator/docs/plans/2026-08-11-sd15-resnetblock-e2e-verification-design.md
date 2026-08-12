@@ -1,7 +1,7 @@
 # SD1.5 ResNetBlock End-to-End Fixed-Point Verification Design
 
 **Date:** 2026-08-11  
-**Status:** Approved design; implementation has not started
+**Status:** Implemented and simulation-validated
 
 ## Goal
 
@@ -63,13 +63,13 @@ outputs are also checked at their existing top-level observation interfaces.
 
 ## Backpressure and failure rules
 
-The directed workload runs in two modes:
+The directed workload has passed in two modes:
 
 - a baseline with immediately available AXI64 responses; and
 - a deterministic backpressure mode with bounded, independent AW, W, B, AR,
   and R delays.
 
-Both modes must produce the same final output.  Every wait has a finite cycle
+Both modes produced the same final output.  Every wait has a finite cycle
 limit and reports the pending phase or channel on failure.  The test fails on
 an invalid phase order, missing or duplicate beat, unexpected address, bad
 write strobe, non-OKAY AXI response, early `done`, timeout, or any lane
@@ -77,10 +77,14 @@ mismatch.
 
 ## Evidence and exclusions
 
-Required evidence is the focused end-to-end test, the existing focused AXI64
-and arithmetic tests, and generated Verilog from the unchanged accelerator.
-Board wrapper work, Vivado implementation, bitstream generation, and FPGA
-programming remain out of scope until this verification evidence is complete.
+Recorded evidence on 2026-08-12:
+
+- `sbt 'testOnly FLOOD_Accelerator.diffusion.DiffusionAccelTopResNetBlockE2ESpec FLOOD_Accelerator.diffusion.DiffusionAccelTopAxi64Spec FLOOD_Accelerator.diffusion.MigAppToAxi64BridgeSpec FLOOD_Accelerator.diffusion.ConvToGroupNormStatsPathSpec FLOOD_Accelerator.diffusion.Conv2ResidualPathSpec FLOOD_Accelerator.diffusion.GroupNormActivationPathSpec FLOOD_Accelerator.diffusion.Axi64MemoryModelSpec FLOOD_Accelerator.diffusion.ResNetBlockE2ETestSupportSpec'` passed 17 tests in 8 suites with zero failures.
+- The directed 32-lane vector completed through LoadResidual, GN1, Conv1, GN2, Conv2/residual fusion, StoreOutput, and final AXI64 writeback.  Its final 512-bit word matched the integer reference lane-for-lane both with immediate memory responses and with independent staggered AW/W/B/AR/R delays.
+- `sbt 'runMain FLOOD_Accelerator.diffusion.GenerateDiffusionAccelAxi64TopVerilog'` completed successfully, regenerating the AXI64-backend accelerator through Chisel elaboration without a new version-controlled artifact.
+- The Windows full-suite run (with a 4 GiB SBT heap) passed 76 tests. Its only remaining test, `MacMachineWrapperTest`, intentionally requires the external Verilator backend and therefore cannot run from the Windows PATH. The same test was run in the existing Ubuntu WSL environment with Verilator 5.032 and passed 1/1 (309.206 s). A temporary `/tmp` Verilator copy was used only to disable precompiled headers, avoiding the WSL-mounted-directory build issue; no project source or test was changed. Together these results cover all 77 repository tests.
+
+This evidence validates one directed fixed-point vector and the listed timing modes.  It does not establish floating-point SD1.5 numerical accuracy, arbitrary tensor shapes, full production weights, or performance at a target FPGA clock.  Board wrapper work, Vivado implementation, bitstream generation, and FPGA programming remain out of scope for this verified milestone.
 
 The planned AXKU15 transparent top remains documented separately and is
 explicitly deferred by
