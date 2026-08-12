@@ -1,6 +1,6 @@
 # SD1.5 ResNetBlock Three-Vector AXI64 Verification Design
 
-**Date:** 2026-08-12  
+**Date:** 2026-08-12
 **Status:** Approved for implementation
 
 ## Goal
