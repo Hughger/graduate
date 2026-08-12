@@ -1,7 +1,7 @@
 # SD1.5 ResNetBlock Nonzero-Mean Variance-Four AXI64 Verification Design
 
 **Date:** 2026-08-12
-**Status:** Approved for implementation
+**Status:** Implemented and simulation-validated
 
 ## Goal
 
@@ -53,6 +53,23 @@ histories, all delayed `AW/W/B/AR/R` channels, one `done` pulse, and no AXI
 behavioural-model protocol error.  Existing vector-depth and consecutive
 transaction cases are rerun unchanged.
 
+## Simulation evidence
+
+- The reference-model RED failed as intended: the new contract initially could not
+  resolve `finalLanesWithMeanAndRsqrt`; the minimal helper then made all 5/5
+  support tests pass.
+- The AXI64 ResNetBlock E2E suite passed 6/6 cases (0 failures, 0 errors),
+  including `preserve nonzero-mean variance-four vectors through AXI64
+  ResNetBlock`.
+- The directed workload observed GN1 and GN2 statistics `(208, 880, 64)`,
+  integer mean `3`, variance `4`, and Q2.30 reciprocal square root
+  `480191942`.  It verified Conv1 preservation, mean-aware GN2 activation,
+  Conv2 plus `temb=+5` and `residual=-3`, writeback at `0x800`/`0x840`, read
+  history `0x400`/`0x440`, all delayed AXI64 channels, `done`, and no
+  behavioural-memory protocol error.
+- The focused cross-module regression passed 30/30 tests across 11 suites
+  (0 failures, 0 errors). `GenerateDiffusionAccelAxi64TopVerilog` also
+  completed successfully in 19 seconds.
 ## Exclusions
 
 This proves one directed integer-mean, variance-four workload.  It does not

@@ -32,13 +32,13 @@ normalization and affine scaling.  No production RTL changes.
 - Produces: `finalLanesWithMeanAndRsqrt(input, temb, residual, mean, rsqrtQ30): Vector[Int]`.
 - Consumes: existing `roundAwayFromZero`, `saturateInt16`, and `silu16`.
 
-- [ ] **Step 1: Write the failing reference test**
+- [x] **Step 1: Write the failing reference test**
 
 Use the two input words, `mean = 3`, `rsqrtQ30 = 480191942`, `temb = 5`, and
 `residual = -3`.  Assert aggregate statistics `(208, 880, 64)` and that the
 mean-aware result differs from `finalLanesWithRsqrt` on word 0.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 $env:SBT_OPTS='-Dsbt.server.autostart=false -Xms512m -Xmx4G'
@@ -47,7 +47,7 @@ sbt 'testOnly FLOOD_Accelerator.diffusion.ResNetBlockE2ETestSupportSpec'
 
 Expected: compilation fails because the mean-aware helper is absent.
 
-- [ ] **Step 3: Implement the minimal helper**
+- [x] **Step 3: Implement the minimal helper**
 
 ```scala
 def finalLanesWithMeanAndRsqrt(
@@ -61,7 +61,7 @@ def finalLanesWithMeanAndRsqrt(
   }
 ```
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Re-run Step 2; expected all support tests pass.  Commit the reference update.
 
@@ -74,14 +74,14 @@ Re-run Step 2; expected all support tests pass.  Commit the reference update.
 - Consumes: mean-aware reference helper, AXI64 behavioural memory, and existing `idle`/`tick` helpers.
 - Produces: test `preserve nonzero-mean variance-four vectors through AXI64 ResNetBlock`.
 
-- [ ] **Step 1: Write the failing E2E case**
+- [x] **Step 1: Write the failing E2E case**
 
 Drive reads at `0x400`, `0x440`; GN1/GN2 `vectors=2`; and writes at
 `0x800`, `0x840`.  Assert both statistics outputs equal `(208, 880, 64)`;
 capture two Conv1 vectors equal to inputs, two mean-aware activations, and two
 final outputs/writeback words.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 sbt 'testOnly FLOOD_Accelerator.diffusion.DiffusionAccelTopResNetBlockE2ESpec'
@@ -89,14 +89,14 @@ sbt 'testOnly FLOOD_Accelerator.diffusion.DiffusionAccelTopResNetBlockE2ESpec'
 
 Expected: failure until the mean-aware helper and E2E comparisons are connected; do not change RTL to force it.
 
-- [ ] **Step 3: Complete capture and handshake checks**
+- [x] **Step 3: Complete capture and handshake checks**
 
 Use the validated two-vector capture pattern.  Activation observation must
 continue accepting valid beats while paired Conv2 output completes; record
 only the first two vectors.  Require read history `[0x400, 0x440]`, write
 history `[0x800, 0x840]`, delayed channel set `AW/W/B/AR/R`, and no protocol error.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Re-run Step 2 with all E2E cases; expected zero failures.  Commit the E2E
 regression together with the reference helper if not already committed.
@@ -107,7 +107,7 @@ regression together with the reference helper if not already committed.
 - Modify: `accelerator/docs/plans/2026-08-12-sd15-resnetblock-nonzero-mean-variance-four-design.md`
 - Modify: `accelerator/docs/plans/2026-08-12-sd15-resnetblock-nonzero-mean-variance-four-implementation.md`
 
-- [ ] **Step 1: Run focused suites and elaborate the AXI64 top**
+- [x] **Step 1: Run focused suites and elaborate the AXI64 top**
 
 ```powershell
 $env:SBT_OPTS='-Dsbt.server.autostart=false -Xms512m -Xmx4G'
@@ -118,7 +118,7 @@ git diff --check
 
 Expected: zero test failures, successful elaboration, and no formatting error.
 
-- [ ] **Step 2: Record evidence and commit**
+- [x] **Step 2: Record evidence and commit**
 
 Set design status to `Implemented and simulation-validated`; record actual test/suite counts, statistics, mean/variance/rsqrt, addresses, all E2E checks, and exclusions.  Mark checkboxes only after success and commit evidence.
 
@@ -127,3 +127,14 @@ Set design status to `Implemented and simulation-validated`; record actual test/
 - The helper mirrors mean subtraction, rounding, affine scaling, SiLU, and saturation in RTL.
 - The workload makes integer mean subtraction observable because mean-aware and zero-mean references differ.
 - Scope is test/reference/documentation only; no board-flow work.
+
+## Execution record
+
+- Reference RED: compilation failed because `finalLanesWithMeanAndRsqrt` was absent.
+- Reference GREEN: 5/5 support tests passed after adding the test-only helper.
+- E2E GREEN: 6/6 ResNetBlock AXI64 cases passed, including the nonzero-mean,
+  variance-four two-vector workload.
+- Focused regression: 30/30 tests passed across 11 suites, with zero failures
+  and zero errors; AXI64 top Verilog generation completed successfully.
+- Scope remained test/reference/documentation only. No production RTL, Vivado
+  implementation, bitstream, or FPGA programming change was made.
