@@ -1,7 +1,7 @@
 # SD1.5 ResNetBlock Four-Vector AXI64 Verification Design
 
 **Date:** 2026-08-12
-**Status:** Approved for implementation
+**Status:** Implemented and simulation-validated
 
 ## Goal
 
@@ -15,8 +15,8 @@ backpressure.
 
 The DUT remains `new DiffusionAccelTop(memoryBackend =
 DiffusionMemoryBackend.Axi64)`.  One test is added to the existing E2E
-specification; there is no production RTL, interface, AXKU15 demo, Vivado, or
-FPGA change.
+specification plus one top-level Decoupled handshake correction.  No public
+interface, AXKU15 demo, Vivado, or FPGA change is made.
 
 The transaction has four 32-lane INT16 words:
 
@@ -50,6 +50,34 @@ after its fourth recorded vector until the paired Conv2 collection completes;
 extra accepted beats are not recorded.  Existing one-, two-, three-vector,
 and consecutive-transaction E2E cases remain unchanged and are rerun.
 
+## Recorded evidence
+
+The initial four-vector E2E run exposed a top-level Decoupled contract defect:
+`io.gn2Activation.valid` reflected only the GroupNorm/SiLU producer, while an
+external activation handshake could occur before the same vector was accepted
+by Conv2.  A four-vector workload therefore observed the third activation
+word twice at the public port.  The minimal production fix gates the public
+activation `valid` with `gn2ConvPath.io.activation.ready`; the output bits and
+internal source ready condition remain unchanged.  Consequently, every public
+`valid && ready` now corresponds to a real source-to-Conv2 transfer.
+
+On 2026-08-12, the focused command below completed with 28 passing tests in
+11 suites and zero failures after that fix:
+
+```powershell
+sbt 'testOnly FLOOD_Accelerator.diffusion.TensorTileBufferSpec FLOOD_Accelerator.diffusion.TensorLoadBufferSpec FLOOD_Accelerator.diffusion.ResNetBlockE2ETestSupportSpec FLOOD_Accelerator.diffusion.DiffusionAccelTopResNetBlockE2ESpec FLOOD_Accelerator.diffusion.Axi64MemoryModelSpec FLOOD_Accelerator.diffusion.DiffusionAccelTopAxi64Spec FLOOD_Accelerator.diffusion.MigAppToAxi64BridgeSpec FLOOD_Accelerator.diffusion.ConvToGroupNormStatsPathSpec FLOOD_Accelerator.diffusion.Conv2ResidualPathSpec FLOOD_Accelerator.diffusion.GroupNormActivationPathSpec FLOOD_Accelerator.diffusion.RsqrtUnitReferenceSpec'
+```
+
+The ResNetBlock E2E suite completed five tests: one, two, three, and four
+vectors plus consecutive transactions.  The four-vector case checked
+statistics `(0, 128, 128)`, all four Conv1/activation/Conv2-residual reference
+vectors, reads `0x400/0x440/0x480/0x4C0`, writes
+`0x800/0x840/0x880/0x8C0`, all delayed AW/W/B/AR/R channels, one completion,
+and no AXI behavioural-model protocol error.
+
+`sbt 'runMain FLOOD_Accelerator.diffusion.GenerateDiffusionAccelAxi64TopVerilog'`
+completed successfully after the focused regression.  No Vivado implementation,
+bitstream generation, or FPGA operation was run.
 ## Exclusions
 
 This is a simulation-only transaction-depth increment.  It does not establish

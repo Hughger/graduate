@@ -1,13 +1,14 @@
 # SD1.5 ResNetBlock Four-Vector AXI64 Verification Implementation Plan
 
 **Goal:** Add a four-vector fixed-point AXI64 E2E regression and record
-reproducible simulator-only evidence without modifying production RTL.
+reproducible evidence, with one verified top-level Decoupled handshake correction.
 
 **Architecture:** Extend `DiffusionAccelTopResNetBlockE2ESpec` with one local
 four-vector workload.  Reuse `ResNetBlockE2EReference` and
 `Axi64MemoryModel.staggered`; collect exactly four vectors per observation
 stream while continuing required Decoupled handshakes to avoid injecting
-observer backpressure into Conv2.
+observer backpressure into Conv2.  Gate public GN2 activation `valid` with the
+internal Conv2 activation `ready` so an external handshake is a real transfer.
 
 **Tech Stack:** Scala 2.12.13, Chisel 3.5.3, chiseltest 0.5.3, ScalaTest, SBT
 1.12.15, Eclipse Adoptium Java 17.
@@ -15,14 +16,11 @@ observer backpressure into Conv2.
 ## Global Constraints
 
 - DUT: `new DiffusionAccelTop(memoryBackend = DiffusionMemoryBackend.Axi64)`.
-- Change only the E2E test and four-vector design/verification documents.
-- Do not modify production RTL, AXKU15 demo/IP, Vivado Tcl, bitstream flow, or
-  FPGA state.
-- Four 64-byte reads are `0x400`, `0x440`, `0x480`, `0x4C0`; four writes are
-  `0x800`, `0x840`, `0x880`, `0x8C0`.
+- Change only `DiffusionAccelTop` GN2 activation valid gating, the E2E test, and four-vector design/verification documents.
+- Do not modify any production RTL other than the stated GN2 activation valid gating; do not modify AXKU15 demo/IP, Vivado Tcl, bitstream flow, or FPGA state.
+- Four 64-byte reads are `0x400`, `0x440`, `0x480`, `0x4C0`; four writes are `0x800`, `0x840`, `0x880`, `0x8C0`.
 - All command vectors/beats are four; aggregate stats are `(0, 128, 128)`.
-- Use `Axi64DelayProfile.staggered`, require all `AW/W/B/AR/R`, and retain
-  named finite polling limits.
+- Use `Axi64DelayProfile.staggered`, require all `AW/W/B/AR/R`, and retain named finite polling limits.
 
 ---
 
@@ -38,7 +36,7 @@ observer backpressure into Conv2.
 - Produces: test `preserve four DMA vectors and write all fixed-point results
   in order`.
 
-- [ ] **Step 1: Add a failing four-vector test**
+- [x] **Step 1: Add a failing four-vector test**
 
 Declare and assert the following test workload:
 
@@ -55,22 +53,24 @@ Drive `beats = 4` and every compute `vectors = 4`; collect/compare four
 Conv1, activation, and Conv2 vectors; require four read/write burst bases and
 four writeback words.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 $env:SBT_OPTS='-Dsbt.server.autostart=false -Xms512m -Xmx4G'
 sbt 'testOnly FLOOD_Accelerator.diffusion.DiffusionAccelTopResNetBlockE2ESpec'
 ```
 
-Expected: the new test initially fails until its test-side capture and
-handshake handling are complete; do not modify production RTL to force it.
+Expected: the new test initially exposes whether the public GN2 activation
+handshake represents actual Conv2 progress; only the stated one-line valid
+gating may be corrected if it does not.
 
-- [ ] **Step 3: Complete minimal test-side capture**
+- [x] **Step 3: Complete minimal test-side capture**
 
 Use 4 as the capture bound.  Set `dut.clock.setTimeout(0)` only in the new
-long-running test; each named wait must remain finite.  Keep output `ready`
-high for each valid activation/Conv2 transfer required to advance the pipeline,
-but append to its result buffer only while `size < 4`.  Assert:
+long-running test; each named wait must remain finite.  Gate
+`io.gn2Activation.valid` with `gn2ConvPath.io.activation.ready`; keep output
+`ready` high for each valid activation/Conv2 transfer required to advance the
+pipeline, but append to its result buffer only while `size < 4`.  Assert:
 
 ```scala
 memory.readBurstAddresses shouldBe Vector(BigInt(0x400), BigInt(0x440), BigInt(0x480), BigInt(0x4C0))
@@ -79,7 +79,7 @@ memory.delayedChannels shouldBe Set("AW", "W", "B", "AR", "R")
 memory.assertNoProtocolError()
 ```
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Re-run Step 2.  Expected: all ResNetBlock E2E tests pass with zero failures.
 
@@ -94,7 +94,7 @@ git commit -m "test: verify four-vector ResNetBlock DMA flow"
 - Modify: `accelerator/docs/plans/2026-08-12-sd15-resnetblock-four-vector-verification-design.md`
 - Modify: `accelerator/docs/plans/2026-08-12-sd15-resnetblock-four-vector-verification-implementation.md`
 
-- [ ] **Step 1: Run focused regression**
+- [x] **Step 1: Run focused regression**
 
 ```powershell
 $env:SBT_OPTS='-Dsbt.server.autostart=false -Xms512m -Xmx4G'
@@ -106,7 +106,7 @@ git diff --check
 Expected: focused suites pass with zero failures, top elaboration succeeds,
 and diff check emits nothing.
 
-- [ ] **Step 2: Record evidence and commit**
+- [x] **Step 2: Record evidence and commit**
 
 Set the design status to `Implemented and simulation-validated`; record actual
 test/suite counts, four input/result checks, burst histories, backpressure,
@@ -125,3 +125,14 @@ git commit -m "docs: record four-vector verification evidence"
 - Scope is restricted to a test and evidence documents; no board-flow work.
 - Activation handshake behavior matches the validated three-vector observation
   rule, but the captured output limit is four.
+
+## Execution record
+
+- The first four-vector E2E run failed by observing the third activation word
+  twice.  It revealed a top-level public-handshake contract defect, not a
+  fixed-point reference mismatch.
+- `DiffusionAccelTop` now gates `io.gn2Activation.valid` with Conv2 activation
+  readiness.  The four-vector regression then passed together with all
+  one-/two-/three-vector and consecutive-transaction cases.
+- Final focused regression: 28/28 tests in 11 suites; AXI64 top elaboration:
+  successful; both recorded on 2026-08-12.

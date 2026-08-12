@@ -169,7 +169,7 @@ class DiffusionAccelTop(
   convToGn2Stats.io.activationCommand.bits := io.gn2ActivationCommand.bits
   io.gn2ActivationCommand.ready := scheduler.io.phase === BlockPhase.Gn2Conv2Residual.U && convToGn2Stats.io.activationCommand.ready
   gn2ActivationPath.io.activation <> convToGn2Stats.io.activationOutput
-  io.gn2Activation.valid := gn2ActivationPath.io.output.valid
+  io.gn2Activation.valid := gn2ActivationPath.io.output.valid && gn2ConvPath.io.activation.ready
   io.gn2Activation.bits := gn2ActivationPath.io.output.bits
   gn2ConvPath.io.activation.valid := gn2ActivationPath.io.output.valid && io.gn2Activation.ready
   gn2ConvPath.io.activation.bits := gn2ActivationPath.io.output.bits
