@@ -39,7 +39,7 @@ reference is exact for the selected workload.
 - Produces: one test named `preserve three DMA vectors and write all fixed-point
   results in order`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append a test whose inputs and expected aggregate statistics are:
 
@@ -56,7 +56,7 @@ Drive read/write commands with `beats.poke(3.U)`, every compute command with
 compute observation.  Require the exact read/write address history and three
 writeback words.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -68,7 +68,7 @@ sbt 'testOnly FLOOD_Accelerator.diffusion.DiffusionAccelTopResNetBlockE2ESpec --
 Expected: the test fails before production-code edits because the existing
 output capture/expectation bounds are two vectors.
 
-- [ ] **Step 3: Implement the minimal test-only generalization**
+- [x] **Step 3: Implement the minimal test-only generalization**
 
 Keep the existing two-vector and consecutive-transaction tests unchanged.
 Within the new test, use a local `capture` helper parameterized with expected
@@ -85,12 +85,12 @@ memory.delayedChannels shouldBe Set("AW", "W", "B", "AR", "R")
 memory.assertNoProtocolError()
 ```
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Re-run the Step 2 command.  Expected: exactly one selected test passes with
 zero failures.
 
-- [ ] **Step 5: Commit test increment**
+- [x] **Step 5: Commit test increment**
 
 ```powershell
 git add accelerator/src/test/scala/diffusion/DiffusionAccelTopResNetBlockE2ESpec.scala
@@ -108,7 +108,7 @@ git commit -m "test: verify three-vector ResNetBlock DMA flow"
   AXI64, bridge, compute, buffer, and rsqrt tests.
 - Produces: reproducible evidence for the simulator-only three-vector boundary.
 
-- [ ] **Step 1: Run focused regression**
+- [x] **Step 1: Run focused regression**
 
 ```powershell
 $env:SBT_OPTS='-Dsbt.server.autostart=false -Xms512m -Xmx4G'
@@ -117,7 +117,7 @@ sbt 'testOnly FLOOD_Accelerator.diffusion.TensorTileBufferSpec FLOOD_Accelerator
 
 Expected: all selected suites pass with zero failures.
 
-- [ ] **Step 2: Elaborate the unchanged AXI64 top**
+- [x] **Step 2: Elaborate the unchanged AXI64 top**
 
 ```powershell
 sbt 'runMain FLOOD_Accelerator.diffusion.GenerateDiffusionAccelAxi64TopVerilog'
@@ -127,7 +127,7 @@ git diff --check
 Expected: elaboration and diff check return zero; no generated tracked source
 artifact is added.
 
-- [ ] **Step 3: Update evidence wording**
+- [x] **Step 3: Update evidence wording**
 
 Set the design status to `Implemented and simulation-validated`.  Record the
 actual focused-test suite/count and elaboration result; identify the input,
@@ -151,3 +151,20 @@ git commit -m "docs: record three-vector verification evidence"
   bounded wait has an explicit Task 1 check.
 - Consistency: all three input vectors produce aggregate variance one and use
   the existing Q2.30 reference `759250125`.
+
+## Execution record
+
+- Initial test compile exposed unsupported ScalaTest `withClue` syntax; it was
+  replaced with an equivalent explicit assertion before simulation.
+- The first simulation run exposed duplicate test-side collection after an
+  output stream had already reached three records.  Collection is now bounded
+  to three records.
+- The next run exposed chiseltest's default 1000-cycle global clock limit;
+  this test disables that global limit while retaining every named finite
+  phase/handshake timeout.
+- The following run showed that `gn2Activation.ready` forwards the observed
+  activation into Conv2.  The observer therefore keeps handshaking after its
+  three captured vectors, without recording extras.  No production RTL change
+  was required.
+- The final focused regression passed 27/27 tests in 11 suites, and AXI64 top
+  elaboration completed successfully on 2026-08-12.

@@ -1,7 +1,7 @@
 # SD1.5 ResNetBlock Three-Vector AXI64 Verification Design
 
 **Date:** 2026-08-12
-**Status:** Approved for implementation
+**Status:** Implemented and simulation-validated
 
 ## Goal
 
@@ -48,6 +48,33 @@ error.  Every wait remains bounded.  Existing one-vector, two-vector, and
 consecutive-transaction tests remain unchanged and are rerun in the focused
 regression.
 
+## Recorded evidence
+
+On 2026-08-12, the focused command below completed with 27 passing tests in
+11 suites and zero failures:
+
+```powershell
+sbt 'testOnly FLOOD_Accelerator.diffusion.TensorTileBufferSpec FLOOD_Accelerator.diffusion.TensorLoadBufferSpec FLOOD_Accelerator.diffusion.ResNetBlockE2ETestSupportSpec FLOOD_Accelerator.diffusion.DiffusionAccelTopResNetBlockE2ESpec FLOOD_Accelerator.diffusion.Axi64MemoryModelSpec FLOOD_Accelerator.diffusion.DiffusionAccelTopAxi64Spec FLOOD_Accelerator.diffusion.MigAppToAxi64BridgeSpec FLOOD_Accelerator.diffusion.ConvToGroupNormStatsPathSpec FLOOD_Accelerator.diffusion.Conv2ResidualPathSpec FLOOD_Accelerator.diffusion.GroupNormActivationPathSpec FLOOD_Accelerator.diffusion.RsqrtUnitReferenceSpec'
+```
+
+The ResNetBlock E2E suite completed four tests: the existing one-vector,
+two-vector, and consecutive-transaction cases plus the new three-vector case.
+The latter used the three directed words defined above, observed GroupNorm
+statistics `(0, 96, 96)`, and matched every Conv1, GN2 activation, and
+Conv2/residual vector to the integer reference.  It verified three read bursts
+at `0x400`, `0x440`, and `0x480`, three writes at `0x800`, `0x840`, and
+`0x880`, all five delayed AW/W/B/AR/R channels, and no AXI behavioural-model
+protocol error.
+
+The external activation observation is part of the live path into Conv2, so
+the test continues to handshake that Decoupled channel after recording its
+three expected vectors.  This prevents the observer from introducing
+backpressure that would block the internal computation; only the first three
+vectors are retained for comparison.
+
+`sbt 'runMain FLOOD_Accelerator.diffusion.GenerateDiffusionAccelAxi64TopVerilog'`
+completed successfully after the focused regression.  No production RTL,
+Vivado implementation, bitstream generation, or FPGA operation was run.
 ## Exclusions
 
 This is a simulation-only transaction-length extension.  It does not prove
