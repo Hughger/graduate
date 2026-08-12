@@ -51,4 +51,48 @@ class TensorTileBufferSpec extends AnyFlatSpec with ChiselScalatestTester {
       dut.io.highWater.expect(3.U)
     }
   }
+
+  it should "clear logical state without accepting a read or write" in {
+    test(new TensorTileBuffer(depth = 8, dataWidth = 16)) { dut =>
+      dut.io.write.valid.poke(false.B)
+      dut.io.readReq.valid.poke(false.B)
+      dut.io.readResp.ready.poke(false.B)
+      dut.io.clear.poke(false.B)
+      dut.clock.step()
+
+      def write(address: Int, value: Int): Unit = {
+        dut.io.write.bits.address.poke(address.U)
+        dut.io.write.bits.data.poke(value.U)
+        dut.io.write.valid.poke(true.B)
+        dut.io.write.ready.expect(true.B)
+        dut.clock.step()
+        dut.io.write.valid.poke(false.B)
+      }
+
+      write(3, 0x1111)
+      write(5, 0x2222)
+      dut.io.occupancy.expect(2.U)
+      dut.io.highWater.expect(2.U)
+
+      dut.io.write.bits.address.poke(3.U)
+      dut.io.write.bits.data.poke(0x3333.U)
+      dut.io.write.valid.poke(true.B)
+      dut.io.readReq.bits.poke(3.U)
+      dut.io.readReq.valid.poke(true.B)
+      dut.io.clear.poke(true.B)
+      dut.io.write.ready.expect(false.B)
+      dut.io.readReq.ready.expect(false.B)
+      dut.io.readResp.valid.expect(false.B)
+      dut.clock.step()
+      dut.io.clear.poke(false.B)
+      dut.io.write.valid.poke(false.B)
+      dut.io.readReq.valid.poke(false.B)
+      dut.io.occupancy.expect(0.U)
+      dut.io.highWater.expect(0.U)
+
+      write(3, 0x4444)
+      dut.io.occupancy.expect(1.U)
+      dut.io.highWater.expect(1.U)
+    }
+  }
 }

@@ -32,6 +32,7 @@ class TensorLoadBuffer(depth: Int) extends Module {
   io.busy := active || writing
   io.done := doneReg
 
+  buffer.io.clear := io.start
   buffer.io.write.valid := writing
   buffer.io.write.bits.address := address
   buffer.io.write.bits.data := lanes(lane)
