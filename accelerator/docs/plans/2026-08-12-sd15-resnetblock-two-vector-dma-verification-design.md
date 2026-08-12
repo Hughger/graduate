@@ -1,7 +1,7 @@
 # SD1.5 ResNetBlock Two-Vector AXI64 DMA Verification Design
 
 **Date:** 2026-08-12  
-**Status:** Approved design; implementation has not started
+**Status:** Implemented and simulation-validated
 
 ## Goal
 
@@ -90,6 +90,13 @@ Required evidence is:
 - generated AXI64-backend accelerator Verilog still elaborates without a
   production RTL change.
 
+## Recorded evidence
+
+Recorded on 2026-08-12:
+
+- `sbt 'testOnly FLOOD_Accelerator.diffusion.DiffusionAccelTopResNetBlockE2ESpec FLOOD_Accelerator.diffusion.Axi64MemoryModelSpec FLOOD_Accelerator.diffusion.DiffusionAccelTopAxi64Spec FLOOD_Accelerator.diffusion.MigAppToAxi64BridgeSpec FLOOD_Accelerator.diffusion.ConvToGroupNormStatsPathSpec FLOOD_Accelerator.diffusion.Conv2ResidualPathSpec FLOOD_Accelerator.diffusion.GroupNormActivationPathSpec'` passed 16 tests in 7 suites with zero failures.
+- The two-vector E2E transaction issued one two-beat read at `0x400`, observed AXI64 read burst bases `0x400`, `0x440`, then issued one two-beat write at `0x800` and observed write burst bases `0x800`, `0x840`. Both final 512-bit words matched the integer reference exactly. The test also checked two ordered Conv1, activation, and Conv2/residual outputs, GN1/GN2 aggregate statistics `(0, 64, 64)`, and exercised staggered AW, W, B, AR, and R backpressure.
+- `sbt 'runMain FLOOD_Accelerator.diffusion.GenerateDiffusionAccelAxi64TopVerilog'` completed successfully. It elaborated the unchanged production AXI64-backend top and introduced no new version-controlled generated artifact.
 ## Exclusions
 
 This verifies exactly one two-vector fixed-point workload.  It does not prove
