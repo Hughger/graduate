@@ -51,14 +51,24 @@ object ResNetBlockE2EReference {
     saturateInt16(capped)
   }
 
-  def finalLanesWithRsqrt(input: Vector[Int], temb: Vector[Int], residual: Vector[Int], rsqrtQ30: BigInt): Vector[Int] = {
+  def finalLanesWithMeanAndRsqrt(
+    input: Vector[Int],
+    temb: Vector[Int],
+    residual: Vector[Int],
+    mean: Int,
+    rsqrtQ30: BigInt
+  ): Vector[Int] = {
     require(input.length == 32 && temb.length == 32 && residual.length == 32)
     input.zipWithIndex.map { case (lane, index) =>
-      val normalized = roundAwayFromZero(BigInt(lane) * rsqrtQ30, 30)
+      val normalized = roundAwayFromZero(BigInt(lane - mean) * rsqrtQ30, 30)
       val affine = roundAwayFromZero(normalized * 256, 8)
       val activation = silu16(saturateInt16(affine))
       saturateInt16(BigInt(activation) + temb(index) + residual(index))
     }
+  }
+
+  def finalLanesWithRsqrt(input: Vector[Int], temb: Vector[Int], residual: Vector[Int], rsqrtQ30: BigInt): Vector[Int] = {
+    finalLanesWithMeanAndRsqrt(input, temb, residual, mean = 0, rsqrtQ30)
   }
 
   def finalLanes(input: Vector[Int], temb: Vector[Int], residual: Vector[Int]): Vector[Int] = {

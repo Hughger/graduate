@@ -32,4 +32,24 @@ class ResNetBlockE2ETestSupportSpec extends AnyFlatSpec with Matchers {
       input, temb, residual, BigInt(480191942)
     ).size shouldBe 32
   }
+
+  it should "derive a nonzero-mean variance-four directed result" in {
+    val input0 = Vector.fill(16)(1) ++ Vector.fill(16)(2)
+    val input1 = Vector.fill(32)(5)
+    val temb = Vector.fill(32)(5)
+    val residual = Vector.fill(32)(-3)
+    val rsqrtVarianceFour = BigInt(480191942)
+
+    ResNetBlockE2EReference.stats(input0 ++ input1) shouldBe GroupStatsReference(208, 880, 64)
+
+    val meanAware = ResNetBlockE2EReference.finalLanesWithMeanAndRsqrt(
+      input0, temb, residual, mean = 3, rsqrtVarianceFour
+    )
+    val zeroMean = ResNetBlockE2EReference.finalLanesWithRsqrt(
+      input0, temb, residual, rsqrtVarianceFour
+    )
+
+    meanAware.size shouldBe 32
+    meanAware should not be zeroMean
+  }
 }
