@@ -87,6 +87,8 @@ final class Axi64MemoryModel(axi: Axi4Master64, delays: Axi64DelayProfile) {
   private var readBeat = 0
   private var protocolError: Option[String] = None
   private val delayed = scala.collection.mutable.Set.empty[String]
+  private val readAddressHistory = scala.collection.mutable.ArrayBuffer.empty[BigInt]
+  private val writeAddressHistory = scala.collection.mutable.ArrayBuffer.empty[BigInt]
 
   private def bit(value: BigInt, index: Int): Boolean = ((value >> index) & 1) == 1
   private def read64(address: BigInt): BigInt = (0 until 8).map { offset => BigInt(bytes(address + offset)) << (8 * offset) }.sum
@@ -110,6 +112,8 @@ final class Axi64MemoryModel(axi: Axi4Master64, delays: Axi64DelayProfile) {
   }
 
   def delayedChannels: Set[String] = delayed.toSet
+  def readBurstAddresses: Vector[BigInt] = readAddressHistory.toVector
+  def writeBurstAddresses: Vector[BigInt] = writeAddressHistory.toVector
 
   def driveBeforeClock(): Unit = {
     axi.aw.ready.poke((writeAddress.isEmpty && addressDelay == 0).B)
@@ -132,7 +136,9 @@ final class Axi64MemoryModel(axi: Axi4Master64, delays: Axi64DelayProfile) {
 
     if (bool(axi.aw.valid) && bool(axi.aw.ready)) {
       if (lit(axi.aw.bits.id) != 0 || lit(axi.aw.bits.len) != 7 || lit(axi.aw.bits.size) != 3) fail("invalid AXI write address burst")
-      writeAddress = Some(lit(axi.aw.bits.addr)); writeBeat = 0; writeDelay = delays.w
+      val base = lit(axi.aw.bits.addr)
+      writeAddressHistory += base
+      writeAddress = Some(base); writeBeat = 0; writeDelay = delays.w
     }
     if (bool(axi.w.valid) && bool(axi.w.ready)) {
       val base = writeAddress.getOrElse { fail("write data without address"); BigInt(0) }
@@ -146,6 +152,7 @@ final class Axi64MemoryModel(axi: Axi4Master64, delays: Axi64DelayProfile) {
     if (bool(axi.ar.valid) && bool(axi.ar.ready)) {
       if (lit(axi.ar.bits.id) != 0 || lit(axi.ar.bits.len) != 7 || lit(axi.ar.bits.size) != 3) fail("invalid AXI read address burst")
       val base = lit(axi.ar.bits.addr)
+      readAddressHistory += base
       readWords = Vector.tabulate(8)(beat => read64(base + 8 * beat)); readBeat = 0; readDelay = delays.r; readAddressDelay = delays.ar
     }
     if (bool(axi.r.valid) && bool(axi.r.ready)) {
