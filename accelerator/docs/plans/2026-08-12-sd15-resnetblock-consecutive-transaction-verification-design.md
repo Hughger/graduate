@@ -1,7 +1,7 @@
 # SD1.5 ResNetBlock Consecutive Transaction Verification Design
 
 **Date:** 2026-08-12  
-**Status:** Approved design; implementation has not started
+**Status:** Implemented and simulation-validated
 
 ## Goal
 
@@ -48,8 +48,9 @@ calculation.  It must not weaken the existing variance-one reference checks.
 1. Start transaction A, issue one two-beat read, execute GN1, Conv1, GN2,
    activation, Conv2/residual, and one two-beat write; wait for exactly one
    top-level `done` pulse.
-2. Before starting transaction B, require `busy == false`, phase `Idle`, and
-   zero tensor-buffer occupancy.
+2. Before starting transaction B, require `busy == false` and phase `Idle`.
+   When B's tensor-read command is accepted, require zero tensor-buffer
+   occupancy before its first DMA beat is accepted.
 3. Start transaction B using a second AXI-Lite start write.  Execute the same
    phases with B's addresses, vector count, parameters, and reference values.
 4. Require exactly one additional `done` pulse, then compare both transaction
@@ -77,6 +78,31 @@ passing existing single- and two-vector ResNetBlock E2E tests plus focused
 AXI64/compute regressions, and successful Chisel elaboration of the unchanged
 AXI64-backend top.
 
+## Recorded evidence
+
+On 2026-08-12, the focused buffer, E2E, AXI64, compute, and rsqrt command
+listed in the companion transaction-reset design completed with 26 passing
+tests in 11 suites and zero failures.  Its ResNetBlock E2E suite completed all
+three directed tests: one vector, two vectors, and two consecutive
+transactions.
+
+Transaction A used opposite-lane-order `+/-1` inputs at `0x400`/`0x440`,
+statistics `(sum, sumSquare, count) = (0, 64, 64)`, and writes at
+`0x800`/`0x840`.  Transaction B used `+/-2` inputs at `0x1000`/`0x1040`,
+statistics `(0, 256, 64)`, Q2.30 rsqrt `480191942`, distinct time/residual
+values, and writes at `0x1800`/`0x1840`.
+
+The completed test observes accepted read history
+`[0x400, 0x440, 0x1000, 0x1040]`, accepted write history
+`[0x800, 0x840, 0x1800, 0x1840]`, no AXI error, and all five staggered
+AW/W/B/AR/R channels.  It retains a snapshot of A's two writeback words and
+proves that B leaves them unchanged.  The tensor-buffer clear check occurs
+after B's accepted read command and before its first payload, which is the
+implemented transaction boundary.
+
+`sbt 'runMain FLOOD_Accelerator.diffusion.GenerateDiffusionAccelAxi64TopVerilog'`
+completed successfully after the focused regression.  No Vivado flow,
+bitstream generation, or FPGA operation was run.
 ## Exclusions
 
 This proves two directed fixed-point transactions only.  It does not establish

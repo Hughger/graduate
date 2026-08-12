@@ -1,7 +1,7 @@
 # Tensor Load Buffer Transaction Reset Design
 
 **Date:** 2026-08-12  
-**Status:** Approved design; implementation has not started
+**Status:** Implemented and simulation-validated
 
 ## Problem
 
@@ -34,8 +34,9 @@ drop an accepted input lane.  The existing buffer RAM contents remain intact
 and become inaccessible until rewritten by the new transaction.
 
 No external port on `DiffusionAccelTop` changes.  The visible effect is that
-`tensorBufferOccupancy` is zero at the boundary after a completed transaction
-and begins counting only the new transaction's lanes.
+`tensorBufferOccupancy` becomes zero in the clear cycle induced by an accepted
+new tensor-DMA transaction, before its first DMA beat is stored, then begins
+counting only that transaction's lanes.
 
 ## Verification
 
@@ -52,6 +53,30 @@ and begins counting only the new transaction's lanes.
 4. Run focused buffer, E2E, AXI64, compute, and rsqrt regressions, then
    elaborate the unchanged AXI64 top through Chisel.
 
+## Recorded evidence
+
+On 2026-08-12, the focused command below completed with 26 passing tests in
+11 suites and no failures:
+
+```powershell
+sbt 'testOnly FLOOD_Accelerator.diffusion.TensorTileBufferSpec FLOOD_Accelerator.diffusion.TensorLoadBufferSpec FLOOD_Accelerator.diffusion.ResNetBlockE2ETestSupportSpec FLOOD_Accelerator.diffusion.DiffusionAccelTopResNetBlockE2ESpec FLOOD_Accelerator.diffusion.Axi64MemoryModelSpec FLOOD_Accelerator.diffusion.DiffusionAccelTopAxi64Spec FLOOD_Accelerator.diffusion.MigAppToAxi64BridgeSpec FLOOD_Accelerator.diffusion.ConvToGroupNormStatsPathSpec FLOOD_Accelerator.diffusion.Conv2ResidualPathSpec FLOOD_Accelerator.diffusion.GroupNormActivationPathSpec FLOOD_Accelerator.diffusion.RsqrtUnitReferenceSpec'
+```
+
+The direct tile-buffer test confirms that `clear` accepts neither a read nor a
+write, clears logical valid/occupancy/high-water/pending state, and lets the
+same address be written again as the first lane of a new transaction.  The
+load-buffer test confirms that the `start`/clear cycle holds DMA input
+`ready` low, exposes zero occupancy, and then accepts the second load; its
+32 lanes become the new logical contents.
+
+The consecutive top-level test checks the same boundary after the second
+transaction's tensor-read command is accepted and before its first payload is
+accepted.  At that point `tensorBufferOccupancy` is zero.  It does not claim
+that occupancy is zero during the idle interval before the new command.
+
+`sbt 'runMain FLOOD_Accelerator.diffusion.GenerateDiffusionAccelAxi64TopVerilog'`
+also completed successfully.  The elaboration generated no tracked source
+change.
 ## Constraints and exclusions
 
 - The change is restricted to `TensorTileBuffer`, its direct
