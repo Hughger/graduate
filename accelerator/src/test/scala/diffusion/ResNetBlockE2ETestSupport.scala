@@ -51,16 +51,19 @@ object ResNetBlockE2EReference {
     saturateInt16(capped)
   }
 
-  def finalLanes(input: Vector[Int], temb: Vector[Int], residual: Vector[Int]): Vector[Int] = {
+  def finalLanesWithRsqrt(input: Vector[Int], temb: Vector[Int], residual: Vector[Int], rsqrtQ30: BigInt): Vector[Int] = {
     require(input.length == 32 && temb.length == 32 && residual.length == 32)
-    val inputStats = stats(input)
-    require(inputStats == GroupStatsReference(0, 32, 32), "directed input must have variance one")
     input.zipWithIndex.map { case (lane, index) =>
-      val normalized = roundAwayFromZero(BigInt(lane) * rsqrtVarianceOne, 30)
+      val normalized = roundAwayFromZero(BigInt(lane) * rsqrtQ30, 30)
       val affine = roundAwayFromZero(normalized * 256, 8)
       val activation = silu16(saturateInt16(affine))
       saturateInt16(BigInt(activation) + temb(index) + residual(index))
     }
+  }
+
+  def finalLanes(input: Vector[Int], temb: Vector[Int], residual: Vector[Int]): Vector[Int] = {
+    require(stats(input) == GroupStatsReference(0, 32, 32), "directed input must have variance one")
+    finalLanesWithRsqrt(input, temb, residual, rsqrtVarianceOne)
   }
 }
 

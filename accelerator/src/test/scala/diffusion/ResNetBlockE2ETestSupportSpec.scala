@@ -22,4 +22,14 @@ class ResNetBlockE2ETestSupportSpec extends AnyFlatSpec with Matchers {
     val output = ResNetBlockE2EReference.finalLanes(input, temb, Vector.fill(32)(0))
     output shouldBe Vector.tabulate(32) { lane => lane + (if (lane < 16) 0 else 2) }
   }
+
+  it should "derive a symmetric variance-four directed result" in {
+    val input = Vector.fill(16)(-2) ++ Vector.fill(16)(2)
+    val temb = Vector.fill(32)(5)
+    val residual = Vector.fill(32)(-3)
+    ResNetBlockE2EReference.stats(input) shouldBe GroupStatsReference(0, 128, 32)
+    ResNetBlockE2EReference.finalLanesWithRsqrt(
+      input, temb, residual, BigInt(480191942)
+    ).size shouldBe 32
+  }
 }
